@@ -139,7 +139,7 @@ canvas {
 				<v-card-title class="pb-1 pt-0">
 					<v-icon class="mr-2">mdi-chart-line</v-icon>
 					bd_pressure — PA Calibration
-					<v-chip x-small class="ml-2" color="blue-grey darken-3" text-color="white">v1.0.0</v-chip>
+					<v-chip x-small class="ml-2" color="blue-grey darken-3" text-color="white">v1.1.0</v-chip>
 					<v-spacer />
 					<v-btn small text @click="loadFromDuet" :loading="fetching" :disabled="fetching || isRunning">
 						<v-icon left small>mdi-download</v-icon>Load log from Duet
