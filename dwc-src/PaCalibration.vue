@@ -73,6 +73,20 @@ canvas {
 				<v-icon small left>mdi-tune</v-icon>Parameters
 			</div>
 
+			<div class="param-section-title">Hotend</div>
+			<v-select
+				v-model="hotendPreset"
+				:items="hotendPresetItems"
+				dense outlined hide-details
+				label="Hotend type"
+				class="mb-1"
+				:disabled="isRunning"
+			/>
+			<div v-if="activePreset.note" class="caption mb-3" style="opacity:0.55;line-height:1.3">
+				{{ activePreset.note }}
+			</div>
+			<div v-else class="mb-3" />
+
 			<div class="param-section-title">Tool</div>
 			<v-text-field :value="params.tool"        @change="v => params.tool        = parseInt(v)   || 0"     dense outlined hide-details label="Tool #"     inputmode="numeric"  class="mb-2" :disabled="isRunning" />
 			<v-text-field :value="params.extruder"    @change="v => params.extruder    = parseInt(v)   || 0"     dense outlined hide-details label="Extruder #" inputmode="numeric"  class="mb-2" :disabled="isRunning" />
@@ -81,10 +95,10 @@ canvas {
 			<v-text-field :value="params.nozzle_temp" @change="v => params.nozzle_temp = parseInt(v)   || 210"   dense outlined hide-details label="Nozzle"     inputmode="numeric"  class="mb-2" :disabled="isRunning" suffix="°C" />
 
 			<div class="param-section-title">PA sweep</div>
-			<v-text-field :value="params.pa_start"    @change="v => params.pa_start    = parseFloat(v) || 0"     dense outlined hide-details label="PA start"   inputmode="decimal"  class="mb-2" :disabled="isRunning" />
-			<v-text-field :value="params.pa_step"     @change="v => params.pa_step     = parseFloat(v) || 0.002" dense outlined hide-details label="PA step"    inputmode="decimal"  class="mb-2" :disabled="isRunning" />
-			<v-text-field :value="params.steps"        @change="v => params.steps        = parseInt(v)   || 50"   dense outlined hide-details label="Steps"        inputmode="numeric"  class="mb-2" :disabled="isRunning" />
-			<v-text-field :value="params.warmup_steps" @change="v => params.warmup_steps = parseInt(v)   || 0"    dense outlined hide-details label="Warm-up passes" inputmode="numeric" class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.pa_start"    @change="v => { params.pa_start    = parseFloat(v) || 0;     hotendPreset = 'custom' }" dense outlined hide-details label="PA start"      inputmode="decimal"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.pa_step"     @change="v => { params.pa_step     = parseFloat(v) || 0.005; hotendPreset = 'custom' }" dense outlined hide-details label="PA step"       inputmode="decimal"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.steps"       @change="v => { params.steps       = parseInt(v)   || 50;    hotendPreset = 'custom' }" dense outlined hide-details label="Steps"          inputmode="numeric"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.warmup_steps" @change="v => params.warmup_steps = parseInt(v)   || 0"                               dense outlined hide-details label="Warm-up passes" inputmode="numeric"  class="mb-2" :disabled="isRunning" />
 			<div class="caption mb-3" style="opacity:0.6">
 				Range: {{ params.pa_start.toFixed(livePaDecimals) }} – {{ paEnd.toFixed(livePaDecimals) }}
 			</div>
@@ -324,15 +338,27 @@ canvas {
 
 							<!-- Parameters -->
 							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-tune</v-icon>Parameter guide</div>
+							<p class="body-2 mb-2">Select your hotend type to automatically set a sensible PA sweep range. You can adjust any value afterwards — changing PA start, step, or steps will switch the selector back to <em>Custom</em>.</p>
+							<v-simple-table dense class="mb-3">
+								<thead><tr><th>Hotend type</th><th>Typical PA range</th><th>Examples</th></tr></thead>
+								<tbody>
+									<tr><td><strong>Short melt zone</strong></td><td>0 – 0.10</td><td>E3D Revo, Slice Mosquito, Dragon HF, NF-Crazy</td></tr>
+									<tr><td><strong>Standard</strong></td><td>0.02 – 0.18</td><td>E3D V6, Dragon ST, Rapido HF, Dragonfly, Spider, Bambu X1/P1/A1</td></tr>
+									<tr><td><strong>High flow / long melt zone</strong></td><td>0.04 – 0.30</td><td>E3D Volcano, Rapido UHF, Dragon UHF, Goliath (50 mm melt zone), Mosquito Magnum+</td></tr>
+									<tr><td><strong>Bowden</strong></td><td>0.3 – 1.5</td><td>Any hotend with a Bowden tube — tube length matters more than hotend type</td></tr>
+								</tbody>
+							</v-simple-table>
+							<p class="body-2 mb-4">If you are unsure, use <em>Standard</em> — it covers the most common PA range and the Analysis panel will tell you if the result falls outside what is expected.</p>
+
 							<v-simple-table dense class="mb-4">
 								<thead><tr><th>Parameter</th><th>What it does</th><th>Suggested starting point</th></tr></thead>
 								<tbody>
 									<tr><td><strong>Tool #</strong></td><td>Which tool to heat and calibrate (T0, T1 …)</td><td>0 for single-tool printers</td></tr>
 									<tr><td><strong>Extruder #</strong></td><td>Which extruder index to pass to M572 (usually matches Tool #)</td><td>0</td></tr>
 									<tr><td><strong>Nozzle temp</strong></td><td>Temperature to heat to before calibrating. Use your normal printing temperature for the filament you want to tune.</td><td>Your usual print temp</td></tr>
-									<tr><td><strong>PA start</strong></td><td>The lowest PA value to test. Start at 0 for a first run.</td><td>0.0</td></tr>
-									<tr><td><strong>PA step</strong></td><td>How much to increase PA between each iteration. Smaller = finer resolution but longer run time.</td><td>0.005 (wide scan), 0.001 (fine)</td></tr>
-									<tr><td><strong>Steps</strong></td><td>Number of iterations. Range covered = PA start + (steps−1) × step.</td><td>40–60</td></tr>
+									<tr><td><strong>PA start</strong></td><td>The lowest PA value to test. Start at 0 for a first run.</td><td>0.0 (set automatically by hotend preset)</td></tr>
+									<tr><td><strong>PA step</strong></td><td>How much to increase PA between each iteration. Smaller = finer resolution but longer run time.</td><td>Set automatically by hotend preset</td></tr>
+									<tr><td><strong>Steps</strong></td><td>Number of iterations. Range covered = PA start + (steps−1) × step.</td><td>50</td></tr>
 									<tr><td><strong>Warm-up passes</strong></td><td>Number of extrusion passes at PA=0 run before the sweep begins. These stabilise the hotend and sensor but are not recorded in the log. Set to 0 to skip.</td><td>5</td></tr>
 									<tr><td><strong>Slow speed</strong></td><td>Speed for the ramp sections (mm/min). Lower = more sensitive to PA.</td><td>1020 (17 mm/s)</td></tr>
 									<tr><td><strong>Fast speed</strong></td><td>Speed for the high-speed section (mm/min). Should be close to your normal print speed.</td><td>10740 (179 mm/s)</td></tr>
@@ -449,6 +475,59 @@ const WARM_UP_SKIP    = 2
 const SLOPE_ASYM_PENALTY = 0.5   // added to composite score per unit |lk - rk|
 const POLL_INTERVAL_MS = 2000
 
+// Hotend presets — sweep parameters + expected PA range for analysis
+// pa_max is a soft ceiling used to warn if the result looks unexpectedly high/low
+const HOTEND_PRESETS = [
+	{
+		id: 'custom',
+		label: 'Custom',
+		group: null,
+		pa_start: 0, pa_step: 0.005, steps: 50,
+		pa_min_expected: 0, pa_max_expected: null,
+		note: null,
+	},
+	// ── Short melt zone ────────────────────────────────────────────────────────
+	// Fast pressure response; shallow/noisy res curves are normal; PA typically low
+	{
+		id: 'short',
+		label: 'Short melt zone',
+		group: 'Short melt zone',
+		pa_start: 0, pa_step: 0.002, steps: 50,
+		pa_min_expected: 0, pa_max_expected: 0.10,
+		note: 'E3D Revo (all variants), Slice Mosquito, Phaetus Dragon HF, Mellow NF-Crazy',
+	},
+	// ── Standard ───────────────────────────────────────────────────────────────
+	// Most direct-drive setups; well-defined minimum typical
+	{
+		id: 'standard',
+		label: 'Standard',
+		group: 'Standard',
+		pa_start: 0, pa_step: 0.005, steps: 50,
+		pa_min_expected: 0.02, pa_max_expected: 0.18,
+		note: 'E3D V6, Phaetus Dragon ST, Rapido HF (v1/v2), Dragonfly BMO/BMS, Creality Spider, Bambu X1/P1/A1, Mellow NF-Crazy (high flow), Slice Mosquito Magnum',
+	},
+	// ── High flow / long melt zone ─────────────────────────────────────────────
+	// Slower pressure response; wider sweep needed; higher PA typical
+	{
+		id: 'highflow',
+		label: 'High flow / long melt zone',
+		group: 'High flow / long melt zone',
+		pa_start: 0, pa_step: 0.005, steps: 50,
+		pa_min_expected: 0.04, pa_max_expected: 0.30,
+		note: 'E3D Volcano, Phaetus Rapido UHF (v1/v2), Dragon UHF, Goliath (VzBot/Mellow, 50 mm melt zone), Slice Mosquito Magnum+, Bondtech CHT bi-metal',
+	},
+	// ── Bowden ────────────────────────────────────────────────────────────────
+	// Tube compliance dominates; PA an order of magnitude higher than direct drive
+	{
+		id: 'bowden',
+		label: 'Bowden',
+		group: 'Bowden',
+		pa_start: 0.3, pa_step: 0.02, steps: 50,
+		pa_min_expected: 0.3, pa_max_expected: 1.5,
+		note: 'Any hotend with a Bowden tube. Tube length and inner diameter matter more than hotend type.',
+	},
+]
+
 export default {
 	name: 'PaCalibration',
 
@@ -456,12 +535,14 @@ export default {
 		return {
 			activeTab: 0,
 
+			hotendPreset: 'custom',
+
 			params: {
 				tool:          0,
 				extruder:      0,
 				nozzle_temp:   210,
 				pa_start:      0.0,
-				pa_step:       0.002,
+				pa_step:       0.005,
 				steps:         50,
 				warmup_steps:  5,
 				low_speed:     1020,
@@ -471,11 +552,12 @@ export default {
 			},
 
 			// live run
-			isRunning:    false,
-			liveRows:     [],
-			liveStatus:   {},
-			pollTimer:    null,
-			copiedLive:   false,
+			isRunning:      false,
+			liveRows:       [],
+			liveStatus:     {},
+			pollTimer:      null,
+			copiedLive:     false,
+			lastRunPreset:  null,
 			liveChartRes:    null,
 			liveChartSlopes: null,
 			liveChartH:      null,
@@ -499,6 +581,22 @@ export default {
 	},
 
 	computed: {
+		hotendPresetItems() {
+			// Build v-select items with group headers
+			const items = []
+			let lastGroup = undefined
+			for (const p of HOTEND_PRESETS) {
+				if (p.group !== lastGroup) {
+					if (p.group) items.push({ header: p.group })
+					lastGroup = p.group
+				}
+				items.push({ text: p.label, value: p.id })
+			}
+			return items
+		},
+		activePreset() {
+			return HOTEND_PRESETS.find(p => p.id === this.hotendPreset) || HOTEND_PRESETS[0]
+		},
 		paEnd() {
 			return this.params.pa_start + (this.params.steps - 1) * this.params.pa_step
 		},
@@ -535,6 +633,13 @@ export default {
 
 	watch: {
 		darkTheme(dark) { this.applyTheme(dark) },
+		hotendPreset(id) {
+			const p = HOTEND_PRESETS.find(x => x.id === id)
+			if (!p || id === 'custom') return
+			this.params.pa_start = p.pa_start
+			this.params.pa_step  = p.pa_step
+			this.params.steps    = p.steps
+		},
 	},
 
 	beforeDestroy() {
@@ -553,6 +658,7 @@ export default {
 			this.destroyLiveCharts()
 			this.activeTab = 0
 			this.isRunning = true
+			this.lastRunPreset = this.activePreset
 
 			try {
 				const p = this.params
@@ -626,7 +732,7 @@ export default {
 					this.isRunning = false
 					await this.pollLog()
 					setTimeout(async () => {
-						await this.loadFromDuet()
+						await this.loadFromDuet(this.lastRunPreset)
 						this.activeTab = 1
 					}, 1500)
 					return
@@ -709,12 +815,12 @@ export default {
 			reader.onerror = () => { this.logError = 'Failed to read file' }
 			reader.readAsText(file)
 		},
-		async loadFromDuet() {
+		async loadFromDuet(preset) {
 			this.fetching = true
 			this.logError = ''
 			try {
 				const text = await this.downloadFile(LOG_PATH)
-				this.parseCSV(text)
+				this.parseCSV(text, preset || null)
 				this.activeTab = 1
 			} catch (e) {
 				this.logError = `Could not fetch log — run a calibration first. (${e.message || e})`
@@ -723,7 +829,7 @@ export default {
 			}
 		},
 
-		parseCSV(text) {
+		parseCSV(text, preset) {
 			this.logError = ''
 			const meta = {}
 			const dataLines = []
@@ -761,7 +867,7 @@ export default {
 			this.meta = meta
 			this.rows = parsed
 			this.best = this.findBest(parsed)
-			this.analysis = this.analyseData(parsed, this.best, meta, this.paDecimalsFor(parsed))
+			this.analysis = this.analyseData(parsed, this.best, meta, this.paDecimalsFor(parsed), preset || null)
 			this.$nextTick(() => this.drawLogCharts())
 		},
 
@@ -776,7 +882,7 @@ export default {
 			return candidates.reduce((a, b) => this.compositeScore(b) < this.compositeScore(a) ? b : a)
 		},
 
-		analyseData(rows, best, meta, dp) {
+		analyseData(rows, best, meta, dp, preset) {
 			dp = dp || 4
 			const items = []
 			const active = rows.filter(r => r.iter >= WARM_UP_SKIP && r.res > 0)
@@ -792,6 +898,17 @@ export default {
 			const step     = meta.pa_step ? parseFloat(meta.pa_step) : null
 			const bestIdx  = active.findIndex(r => r.iter === best.iter)
 			const edgeFrac = paRange > 0 ? Math.min((best.pa - paMin) / paRange, (paMax - best.pa) / paRange) : 0.5
+
+			// --- Hotend preset range check ---
+			if (preset && preset.id !== 'custom' && preset.pa_max_expected !== null) {
+				if (best.pa > preset.pa_max_expected) {
+					items.push({ icon: 'mdi-alert-circle-outline', color: 'orange',
+						text: `Best PA (${best.pa.toFixed(dp)}) is higher than typical for a ${preset.group} hotend (expected up to ${preset.pa_max_expected}). Check your hotend selection is correct, or widen the sweep range to confirm there is no lower minimum at a lower PA value.` })
+				} else if (preset.pa_min_expected > 0 && best.pa < preset.pa_min_expected) {
+					items.push({ icon: 'mdi-information-outline', color: 'yellow',
+						text: `Best PA (${best.pa.toFixed(dp)}) is lower than typical for a ${preset.group} hotend (usually above ${preset.pa_min_expected}). The result may be valid — check the sweep started from PA=0 to rule out a missed minimum.` })
+				}
+			}
 
 			// --- Variability / noise assessment ---
 			// noisy = the minimum is likely just a random dip, not a real signal
