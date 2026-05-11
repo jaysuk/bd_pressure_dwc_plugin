@@ -241,6 +241,9 @@ canvas {
 									<v-chip v-if="meta.pa_start && meta.pa_step && meta.steps" small class="meta-chip" color="blue-grey darken-2" text-color="white">
 										<v-icon left x-small>mdi-ray-start-arrow</v-icon>PA {{ meta.pa_start }} + {{ meta.pa_step }} × {{ meta.steps }}
 									</v-chip>
+									<v-chip v-if="meta.hotend_preset && meta.hotend_preset !== 'custom'" small class="meta-chip" color="indigo darken-2" text-color="white">
+										<v-icon left x-small>mdi-printer-3d-nozzle</v-icon>{{ meta.hotend_preset }}
+									</v-chip>
 								</div>
 
 								<v-alert type="success" dense class="mb-3" v-if="best">
@@ -674,6 +677,7 @@ export default {
 				await this.sendGCode(`set global.bd_live_pa_step = ${p.pa_step}`)
 				await this.sendGCode(`set global.bd_live_steps = ${p.steps}`)
 				await this.sendGCode(`set global.bd_live_warmup_steps = ${p.warmup_steps}`)
+				await this.sendGCode(`set global.bd_live_hotend_preset = "${this.hotendPreset}"`)
 				await this.sendGCode(`set global.bd_live_low_speed = ${p.low_speed}`)
 				await this.sendGCode(`set global.bd_live_high_speed = ${p.high_speed}`)
 				await this.sendGCode(`set global.bd_live_travel_speed = ${p.travel_speed}`)
@@ -864,10 +868,15 @@ export default {
 				} catch (_) {}
 			}
 			if (!parsed.length) { this.logError = 'No valid data rows found'; return }
+			// Resolve preset: prefer explicitly passed preset (live run), then
+			// fall back to hotend_preset recorded in the log header itself
+			const resolvedPreset = preset ||
+				(meta.hotend_preset ? HOTEND_PRESETS.find(p => p.id === meta.hotend_preset) : null) ||
+				null
 			this.meta = meta
 			this.rows = parsed
 			this.best = this.findBest(parsed)
-			this.analysis = this.analyseData(parsed, this.best, meta, this.paDecimalsFor(parsed), preset || null)
+			this.analysis = this.analyseData(parsed, this.best, meta, this.paDecimalsFor(parsed), resolvedPreset)
 			this.$nextTick(() => this.drawLogCharts())
 		},
 
