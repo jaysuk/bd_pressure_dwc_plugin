@@ -83,7 +83,8 @@ canvas {
 			<div class="param-section-title">PA sweep</div>
 			<v-text-field :value="params.pa_start"    @change="v => params.pa_start    = parseFloat(v) || 0"     dense outlined hide-details label="PA start"   inputmode="decimal"  class="mb-2" :disabled="isRunning" />
 			<v-text-field :value="params.pa_step"     @change="v => params.pa_step     = parseFloat(v) || 0.002" dense outlined hide-details label="PA step"    inputmode="decimal"  class="mb-2" :disabled="isRunning" />
-			<v-text-field :value="params.steps"       @change="v => params.steps       = parseInt(v)   || 50"    dense outlined hide-details label="Steps"      inputmode="numeric"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.steps"        @change="v => params.steps        = parseInt(v)   || 50"   dense outlined hide-details label="Steps"        inputmode="numeric"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.warmup_steps" @change="v => params.warmup_steps = parseInt(v)   || 0"    dense outlined hide-details label="Warm-up passes" inputmode="numeric" class="mb-2" :disabled="isRunning" />
 			<div class="caption mb-3" style="opacity:0.6">
 				Range: {{ params.pa_start.toFixed(livePaDecimals) }} – {{ paEnd.toFixed(livePaDecimals) }}
 			</div>
@@ -116,6 +117,7 @@ canvas {
 					<span v-if="liveStatus.state === 'starting'">Starting…</span>
 					<span v-else-if="liveStatus.state === 'heating'">Heating nozzle…</span>
 					<span v-else-if="liveStatus.state === 'priming'">Priming…</span>
+					<span v-else-if="liveStatus.state === 'warmup'">Warm-up ({{ liveStatus.warmup }} passes at PA=0)…</span>
 					<span v-else-if="liveStatus.state === 'running'">
 						Step {{ liveStatus.step }} / {{ liveStatus.steps }}<br>
 						<span style="opacity:0.7">PA {{ (liveStatus.pa || 0).toFixed(livePaDecimals) }}</span>
@@ -331,6 +333,7 @@ canvas {
 									<tr><td><strong>PA start</strong></td><td>The lowest PA value to test. Start at 0 for a first run.</td><td>0.0</td></tr>
 									<tr><td><strong>PA step</strong></td><td>How much to increase PA between each iteration. Smaller = finer resolution but longer run time.</td><td>0.005 (wide scan), 0.001 (fine)</td></tr>
 									<tr><td><strong>Steps</strong></td><td>Number of iterations. Range covered = PA start + (steps−1) × step.</td><td>40–60</td></tr>
+									<tr><td><strong>Warm-up passes</strong></td><td>Number of extrusion passes at PA=0 run before the sweep begins. These stabilise the hotend and sensor but are not recorded in the log. Set to 0 to skip.</td><td>5</td></tr>
 									<tr><td><strong>Slow speed</strong></td><td>Speed for the ramp sections (mm/min). Lower = more sensitive to PA.</td><td>1020 (17 mm/s)</td></tr>
 									<tr><td><strong>Fast speed</strong></td><td>Speed for the high-speed section (mm/min). Should be close to your normal print speed.</td><td>10740 (179 mm/s)</td></tr>
 									<tr><td><strong>Travel speed</strong></td><td>Speed to move between lines (mm/min).</td><td>18000</td></tr>
@@ -348,7 +351,7 @@ canvas {
 							<ul class="body-2 mb-3" style="padding-left:20px">
 								<li>The <strong>red dashed vertical line</strong> marks the recommended PA value — selected using a composite score that combines res with a slope-symmetry penalty (see below).</li>
 								<li>The <strong>green shaded band</strong> covers the contiguous range of PA values around the best point whose composite score stays within 20% of the minimum. Any value in this band will perform similarly well in practice. A wide band means the printer is forgiving; a narrow band means precision matters.</li>
-								<li>The first {{ warmUpSkip }} iterations are skipped when finding the best value (sensor warm-up allowance) — this prevents a spurious low reading from the very first passes being selected.</li>
+								<li>The first {{ warmUpSkip }} recorded iterations are excluded from best-PA selection as a safety margin for residual transients at the very start of the sweep.</li>
 							</ul>
 							<div class="subtitle-2 mb-1">How the best PA is selected</div>
 							<p class="body-2 mb-3">The plugin uses a composite score: <code>score = res + 0.5 × |lk − rk|</code>. This adds a small penalty for slope asymmetry so that a symmetric point can edge out an asymmetric one even if the raw res is slightly higher. If the slope-weighted winner differs from the raw res minimum, the Analysis panel will tell you.</p>
@@ -441,7 +444,7 @@ import { mapState } from 'vuex'
 
 const LOG_PATH        = '0:/sys/pa_calibrate_log.txt'
 const STATUS_PATH     = '0:/sys/pa_live_status.txt'
-const WARM_UP_SKIP    = 8
+const WARM_UP_SKIP    = 2
 const SLOPE_ASYM_PENALTY = 0.5   // added to composite score per unit |lk - rk|
 const POLL_INTERVAL_MS = 2000
 
@@ -453,16 +456,17 @@ export default {
 			activeTab: 0,
 
 			params: {
-				tool:         0,
-				extruder:     0,
-				nozzle_temp:  210,
-				pa_start:     0.0,
-				pa_step:      0.002,
-				steps:        50,
-				low_speed:    1020,
-				high_speed:   10740,
-				travel_speed: 18000,
-				z_height:     50,
+				tool:          0,
+				extruder:      0,
+				nozzle_temp:   210,
+				pa_start:      0.0,
+				pa_step:       0.002,
+				steps:         50,
+				warmup_steps:  5,
+				low_speed:     1020,
+				high_speed:    10740,
+				travel_speed:  18000,
+				z_height:      50,
 			},
 
 			// live run
@@ -500,6 +504,7 @@ export default {
 		liveProgress() {
 			if (!this.liveStatus.steps) return 0
 			if (this.liveStatus.state === 'heating' || this.liveStatus.state === 'priming') return 2
+			if (this.liveStatus.state === 'warmup') return 4
 			if (this.liveStatus.state === 'done') return 100
 			return Math.round((this.liveStatus.step / this.liveStatus.steps) * 100)
 		},
@@ -561,6 +566,7 @@ export default {
 				await this.sendGCode(`set global.bd_live_pa_start = ${p.pa_start}`)
 				await this.sendGCode(`set global.bd_live_pa_step = ${p.pa_step}`)
 				await this.sendGCode(`set global.bd_live_steps = ${p.steps}`)
+				await this.sendGCode(`set global.bd_live_warmup_steps = ${p.warmup_steps}`)
 				await this.sendGCode(`set global.bd_live_low_speed = ${p.low_speed}`)
 				await this.sendGCode(`set global.bd_live_high_speed = ${p.high_speed}`)
 				await this.sendGCode(`set global.bd_live_travel_speed = ${p.travel_speed}`)
@@ -602,6 +608,7 @@ export default {
 			}
 			if (obj.step)     obj.step     = parseInt(obj.step)
 			if (obj.steps)    obj.steps    = parseInt(obj.steps)
+			if (obj.warmup)   obj.warmup   = parseInt(obj.warmup)
 			if (obj.pa)       obj.pa       = parseFloat(obj.pa)
 			if (obj.best_pa)  obj.best_pa  = parseFloat(obj.best_pa)
 			if (obj.best_res) obj.best_res = parseInt(obj.best_res)
