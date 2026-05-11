@@ -68,7 +68,7 @@ canvas {
 		<!-- ================================================================
 		     LEFT PANEL — parameters
 		     ================================================================ -->
-		<v-col cols="12" md="2" class="params-panel pa-3">
+		<v-col v-show="activeTab === 0" cols="12" md="2" class="params-panel pa-3">
 			<div class="subtitle-2 mb-2">
 				<v-icon small left>mdi-tune</v-icon>Parameters
 			</div>
@@ -113,7 +113,8 @@ canvas {
 					height="6" rounded class="mb-1"
 				/>
 				<div class="status-state">
-					<span v-if="liveStatus.state === 'heating'">Heating nozzle…</span>
+					<span v-if="liveStatus.state === 'starting'">Starting…</span>
+					<span v-else-if="liveStatus.state === 'heating'">Heating nozzle…</span>
 					<span v-else-if="liveStatus.state === 'priming'">Priming…</span>
 					<span v-else-if="liveStatus.state === 'running'">
 						Step {{ liveStatus.step }} / {{ liveStatus.steps }}<br>
@@ -254,7 +255,7 @@ canvas {
 											<div class="body-2 mb-2">{{ analysis.nextSweep.reason }}</div>
 											<code class="next-sweep-code">{{ analysis.nextSweep.code }}</code>
 											<v-btn small text class="mt-2" @click="copyNextSweep"><v-icon left small>mdi-content-copy</v-icon>Copy</v-btn>
-											<v-btn small text class="mt-2 ml-1" color="primary" @click="applyNextSweep"><v-icon left small>mdi-arrow-left</v-icon>Apply to params</v-btn>
+											<v-btn small outlined class="mt-2 ml-1" color="primary" @click="applyNextSweep"><v-icon left small>mdi-play-circle-outline</v-icon>Load into Live Run</v-btn>
 											<v-snackbar v-model="copiedSweep" timeout="2000" color="success" top>Next sweep parameters copied</v-snackbar>
 										</template>
 									</v-card-text>
@@ -411,6 +412,9 @@ export default {
 				await this.sendGCode(`set global.bd_live_travel_speed = ${p.travel_speed}`)
 				await this.sendGCode(`set global.bd_live_z_height = ${p.z_height}`)
 
+				// Clear any stale status file so polling can't mistake a previous run as done
+				await this.sendGCode('echo >"0:/sys/pa_live_status.json" "{\\"state\\":\\"starting\\"}"')
+
 				// Fire calibration macro — it runs asynchronously on the Duet
 				await this.sendGCode('M98 P"0:/sys/pa_calibrate_live.g"')
 				this.startPolling()
@@ -444,7 +448,6 @@ export default {
 					this.stopPolling()
 					this.isRunning = false
 					await this.pollLog()
-					// Auto-load completed log into viewer after short delay
 					setTimeout(async () => {
 						await this.loadFromDuet()
 						this.activeTab = 1
@@ -452,7 +455,10 @@ export default {
 					return
 				}
 			} catch (_) {}
-			await this.pollLog()
+			// Only read the log once the macro is actively printing data rows
+			if (this.liveStatus.state === 'running' || this.liveStatus.state === 'done') {
+				await this.pollLog()
+			}
 		},
 
 		async pollLog() {
