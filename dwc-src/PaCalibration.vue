@@ -347,7 +347,7 @@ canvas {
 							<p class="body-2">This is the primary result. <strong>Lower is better</strong> — res measures how far from ideal the pressure profile was during that extrusion move. The algorithm inside the bd_pressure sensor computes this from the raw strain data.</p>
 							<ul class="body-2 mb-3" style="padding-left:20px">
 								<li>The <strong>red dashed vertical line</strong> marks the PA value with the lowest res score — this is the recommended value.</li>
-								<li>The <strong>green shaded band</strong> covers every PA value whose res score is within 20% of the minimum. Any value in this band will perform similarly well in practice. A wide band means the printer is forgiving; a narrow band means precision matters.</li>
+								<li>The <strong>green shaded band</strong> covers the contiguous range of PA values around the best point whose res score stays within 20% of the minimum. Any value in this band will perform similarly well in practice. A wide band means the printer is forgiving; a narrow band means precision matters.</li>
 								<li>The first few iterations are skipped when finding the best value (warm-up allowance) — this is why the red line may not be at the absolute minimum of the curve if the curve dips right at the start.</li>
 							</ul>
 
@@ -940,9 +940,15 @@ export default {
 			if (!best) return null
 			const threshold = best.res * 1.20
 			const active    = rows.filter(r => r.iter >= WARM_UP_SKIP && r.res > 0)
-			const gs = active.find(r => r.res <= threshold)
-			const ge = [...active].reverse().find(r => r.res <= threshold)
-			return gs && ge ? { gs, ge } : null
+			const bestIdx   = active.findIndex(r => r.iter === best.iter)
+			if (bestIdx < 0) return null
+			// Walk left from best until we cross the threshold
+			let lo = bestIdx
+			while (lo > 0 && active[lo - 1].res <= threshold) lo--
+			// Walk right from best until we cross the threshold
+			let hi = bestIdx
+			while (hi < active.length - 1 && active[hi + 1].res <= threshold) hi++
+			return { gs: active[lo], ge: active[hi] }
 		},
 
 		buildChartData(rows) {
