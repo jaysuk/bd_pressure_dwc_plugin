@@ -68,7 +68,7 @@ canvas {
 		<!-- ================================================================
 		     LEFT PANEL — parameters
 		     ================================================================ -->
-		<v-col v-show="activeTab === 0" cols="12" md="2" class="params-panel pa-3">
+		<v-col v-show="activeTab === 0" cols="12" md="2" class="params-panel pa-3" style="overflow-y:auto;max-height:calc(100vh - 120px)">
 			<div class="subtitle-2 mb-2">
 				<v-icon small left>mdi-tune</v-icon>Parameters
 			</div>
@@ -153,6 +153,9 @@ canvas {
 					</v-tab>
 					<v-tab>
 						<v-icon left small>mdi-file-chart</v-icon>Log Viewer
+					</v-tab>
+					<v-tab>
+						<v-icon left small>mdi-help-circle-outline</v-icon>Help
 					</v-tab>
 				</v-tabs>
 
@@ -282,6 +285,145 @@ canvas {
 									<v-btn small text @click="clearData"><v-icon left small>mdi-close</v-icon>Clear</v-btn>
 								</div>
 							</template>
+						</v-card-text>
+					</v-tab-item>
+
+					<!-- ============================================================
+					     TAB 2 — HELP
+					     ============================================================ -->
+					<v-tab-item>
+						<v-card-text class="pt-2" style="max-width:860px">
+
+							<div class="title mb-1">bd_pressure PA Calibration — Help</div>
+							<div class="body-2 mb-4" style="opacity:0.7">Pressure Advance calibration using the bd_pressure strain-gauge sensor</div>
+
+							<v-divider class="mb-4" />
+
+							<!-- What is Pressure Advance -->
+							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-information-outline</v-icon>What is Pressure Advance?</div>
+							<p class="body-2">When an extruder pushes filament, the melt zone and bowden tube act like a spring — pressure builds up on acceleration and bleeds off on deceleration. This causes blobs at corners and gaps after them. Pressure Advance (PA) adds a small extra push on the way into a move and a small retraction on the way out, cancelling the effect. Getting the value right matters: too low leaves blobs, too high leaves gaps or ringing.</p>
+							<p class="body-2 mb-4">Traditional PA tuning requires printing a test pattern and measuring it by eye. This plugin calibrates PA automatically by measuring extruder back-pressure directly with the bd_pressure sensor — no test prints needed.</p>
+
+							<v-divider class="mb-4" />
+
+							<!-- How calibration works -->
+							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-cog-outline</v-icon>How calibration works</div>
+							<p class="body-2">The macro raises the nozzle to a safe Z height and makes a series of short extrusion moves: slow → fast → slow. This is repeated once per PA value across the sweep range you set. On each pass the bd_pressure sensor measures how well the pressure transients are compensated and returns five scores. The plugin plots all of these so you can see not just the winner but the shape of the whole response.</p>
+							<p class="body-2 mb-1">The sequence for each step is:</p>
+							<ol class="body-2 mb-4" style="padding-left:20px">
+								<li>Set PA to the next value in the sweep</li>
+								<li>Move slow for 15 mm (ramp-up)</li>
+								<li>Move fast for 30 mm (high-speed section)</li>
+								<li>Move slow for 15 mm (ramp-down)</li>
+								<li>Read all five scores from the sensor</li>
+							</ol>
+
+							<v-divider class="mb-4" />
+
+							<!-- Parameters -->
+							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-tune</v-icon>Parameter guide</div>
+							<v-simple-table dense class="mb-4">
+								<thead><tr><th>Parameter</th><th>What it does</th><th>Suggested starting point</th></tr></thead>
+								<tbody>
+									<tr><td><strong>Tool #</strong></td><td>Which tool to heat and calibrate (T0, T1 …)</td><td>0 for single-tool printers</td></tr>
+									<tr><td><strong>Extruder #</strong></td><td>Which extruder index to pass to M572 (usually matches Tool #)</td><td>0</td></tr>
+									<tr><td><strong>Nozzle temp</strong></td><td>Temperature to heat to before calibrating. Use your normal printing temperature for the filament you want to tune.</td><td>Your usual print temp</td></tr>
+									<tr><td><strong>PA start</strong></td><td>The lowest PA value to test. Start at 0 for a first run.</td><td>0.0</td></tr>
+									<tr><td><strong>PA step</strong></td><td>How much to increase PA between each iteration. Smaller = finer resolution but longer run time.</td><td>0.005 (wide scan), 0.001 (fine)</td></tr>
+									<tr><td><strong>Steps</strong></td><td>Number of iterations. Range covered = PA start + (steps−1) × step.</td><td>40–60</td></tr>
+									<tr><td><strong>Slow speed</strong></td><td>Speed for the ramp sections (mm/min). Lower = more sensitive to PA.</td><td>1020 (17 mm/s)</td></tr>
+									<tr><td><strong>Fast speed</strong></td><td>Speed for the high-speed section (mm/min). Should be close to your normal print speed.</td><td>10740 (179 mm/s)</td></tr>
+									<tr><td><strong>Travel speed</strong></td><td>Speed to move between lines (mm/min).</td><td>18000</td></tr>
+									<tr><td><strong>Z height</strong></td><td>How high to lift the nozzle during calibration (mm). Must clear any probes or fans.</td><td>50</td></tr>
+								</tbody>
+							</v-simple-table>
+
+							<v-divider class="mb-4" />
+
+							<!-- Graph guide -->
+							<div class="subtitle-1 mb-2"><v-icon small left color="primary">mdi-chart-line</v-icon>Understanding the graphs</div>
+
+							<div class="subtitle-2 mb-1">Graph 1 — Pressure score (res)</div>
+							<p class="body-2">This is the primary result. <strong>Lower is better</strong> — res measures how far from ideal the pressure profile was during that extrusion move. The algorithm inside the bd_pressure sensor computes this from the raw strain data.</p>
+							<ul class="body-2 mb-3" style="padding-left:20px">
+								<li>The <strong>red dashed vertical line</strong> marks the PA value with the lowest res score — this is the recommended value.</li>
+								<li>The <strong>green shaded band</strong> covers every PA value whose res score is within 20% of the minimum. Any value in this band will perform similarly well in practice. A wide band means the printer is forgiving; a narrow band means precision matters.</li>
+								<li>The first few iterations are skipped when finding the best value (warm-up allowance) — this is why the red line may not be at the absolute minimum of the curve if the curve dips right at the start.</li>
+							</ul>
+
+							<div class="subtitle-2 mb-1">Graph 2 — Slopes (lk / rk)</div>
+							<p class="body-2">These measure the shape of the pressure transition on each side of the fast section.</p>
+							<ul class="body-2 mb-3" style="padding-left:20px">
+								<li><strong>lk</strong> (left slope) — the pressure build-up going into the fast segment. High values mean the sensor saw a sharp pressure spike.</li>
+								<li><strong>rk</strong> (right slope) — the pressure bleed-off coming out of the fast segment.</li>
+								<li>At the ideal PA value both slopes should be low and roughly equal. If they diverge significantly across the sweep, your hotend may have a flow asymmetry or temperature gradient.</li>
+							</ul>
+
+							<div class="subtitle-2 mb-1">Graph 3 — Signal quality (Hk / Ha)</div>
+							<p class="body-2">These indicate how clearly the sensor saw the pressure event.</p>
+							<ul class="body-2 mb-3" style="padding-left:20px">
+								<li><strong>Hk</strong> — peak signal amplitude on the entry side of the move.</li>
+								<li><strong>Ha</strong> — peak signal amplitude on the exit side.</li>
+								<li>Values close to 255 mean the sensor got a clean, strong signal. Very low values (below ~30) suggest the sensor didn't register the move clearly — possibly the nozzle was too high, extruder tension was loose, or the move speed was too slow to generate a measurable pressure event.</li>
+								<li>These values should be consistent across the sweep. A sudden drop at a specific PA value is usually a measurement artefact rather than a real feature.</li>
+							</ul>
+
+							<v-divider class="mb-4" />
+
+							<!-- Workflow -->
+							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-format-list-numbered</v-icon>Recommended workflow</div>
+							<ol class="body-2 mb-4" style="padding-left:20px">
+								<li class="mb-1"><strong>First run — wide scan.</strong> Use PA start = 0, step = 0.005, steps = 50 (covers 0–0.245). This finds roughly where the optimum is.</li>
+								<li class="mb-1"><strong>Check the result.</strong> The Analysis panel below the graphs will tell you if the best value is near an edge (suggesting you need to shift the range) or if the curve is flat (suggesting a finer sweep is needed).</li>
+								<li class="mb-1"><strong>Zoom in.</strong> Use the <em>Suggested next sweep</em> values — or click <em>Load into Live Run</em> to fill the parameters automatically — then run again with a finer step around the best value.</li>
+								<li class="mb-1"><strong>Apply.</strong> Click <em>Copy M572</em> on the result badge and paste it into your <code>config.g</code>. Or use the saved <code>/sys/pa_result.g</code> file.</li>
+								<li class="mb-1"><strong>Re-run when things change.</strong> PA is affected by nozzle temperature, filament brand, print speed, and hotend condition. Re-calibrate after significant changes.</li>
+							</ol>
+
+							<v-divider class="mb-4" />
+
+							<!-- Analysis panel -->
+							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-lightbulb-outline</v-icon>Analysis panel explained</div>
+							<v-simple-table dense class="mb-4">
+								<thead><tr><th>Message</th><th>What it means</th></tr></thead>
+								<tbody>
+									<tr><td>Low variability (CV &lt; 20%)</td><td>The sweep was consistent — the result is reliable.</td></tr>
+									<tr><td>Moderate variability (CV 20–40%)</td><td>Some noise in the data. A repeat run would improve confidence.</td></tr>
+									<tr><td>High variability (CV &gt; 40%)</td><td>The data is noisy. Check the sensor is mounted securely and the nozzle temperature has stabilised.</td></tr>
+									<tr><td>Best PA is near the sweep edge</td><td>The true optimum may be outside the range you tested. Shift the sweep in the indicated direction.</td></tr>
+									<tr><td>Best PA is well within range</td><td>The sweep covered the optimum — the result is trustworthy.</td></tr>
+									<tr><td>Flat minimum</td><td>The curve doesn't have a sharp dip. Run again with a finer step to pinpoint the optimum more precisely.</td></tr>
+									<tr><td>Clear minimum</td><td>There is a well-defined lowest point — good confidence in the result.</td></tr>
+									<tr><td>Slope asymmetry</td><td>lk and rk diverge significantly. This can indicate a temperature or flow imbalance in the hotend.</td></tr>
+								</tbody>
+							</v-simple-table>
+
+							<v-divider class="mb-4" />
+
+							<!-- Log files -->
+							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-file-document-outline</v-icon>Log files on the Duet SD card</div>
+							<v-simple-table dense class="mb-4">
+								<thead><tr><th>File</th><th>Contents</th></tr></thead>
+								<tbody>
+									<tr><td><code>/sys/pa_calibrate_log.txt</code></td><td>Full log of every iteration: iter, PA, res, lk, rk, Hk, Ha. Load this in the Log Viewer tab.</td></tr>
+									<tr><td><code>/sys/pa_result.g</code></td><td>Single line: <code>M572 D0 S0.042</code> — the best PA value ready to paste into config.g.</td></tr>
+									<tr><td><code>/sys/pa_live_status.txt</code></td><td>Temporary file written by the macro during a live run. Overwritten each run.</td></tr>
+								</tbody>
+							</v-simple-table>
+
+							<v-divider class="mb-4" />
+
+							<!-- Requirements -->
+							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-chip</v-icon>Requirements</div>
+							<ul class="body-2 mb-4" style="padding-left:20px">
+								<li>bd_pressure sensor flashed with <strong>bd_pressure-rrf firmware v2.24+</strong></li>
+								<li>RepRapFirmware <strong>3.5+</strong> (standalone Duet, no SBC required)</li>
+								<li><code>/sys/bd_globals.g</code> called from <code>config.g</code> on startup</li>
+								<li>Sensor wired to Duet UART (io0 by default) and Z-probe input</li>
+							</ul>
+
+							<div class="caption" style="opacity:0.5">bd_pressure PA Calibration plugin — <a href="https://github.com/jaysuk/bd_pressure_dwc_plugin" target="_blank">github.com/jaysuk/bd_pressure_dwc_plugin</a></div>
+
 						</v-card-text>
 					</v-tab-item>
 
