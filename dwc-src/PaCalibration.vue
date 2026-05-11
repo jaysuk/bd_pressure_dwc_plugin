@@ -74,27 +74,27 @@ canvas {
 			</div>
 
 			<div class="param-section-title">Tool</div>
-			<v-text-field v-model.number="params.tool"        dense outlined hide-details label="Tool #"     type="number" min="0"   class="mb-2" :disabled="isRunning" />
-			<v-text-field v-model.number="params.extruder"    dense outlined hide-details label="Extruder #" type="number" min="0"   class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.tool"        @change="v => params.tool        = parseInt(v)   || 0"     dense outlined hide-details label="Tool #"     inputmode="numeric"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.extruder"    @change="v => params.extruder    = parseInt(v)   || 0"     dense outlined hide-details label="Extruder #" inputmode="numeric"  class="mb-2" :disabled="isRunning" />
 
 			<div class="param-section-title">Temperature</div>
-			<v-text-field v-model.number="params.nozzle_temp" dense outlined hide-details label="Nozzle"     type="number" min="150" max="350" class="mb-2" :disabled="isRunning" suffix="°C" />
+			<v-text-field :value="params.nozzle_temp" @change="v => params.nozzle_temp = parseInt(v)   || 210"   dense outlined hide-details label="Nozzle"     inputmode="numeric"  class="mb-2" :disabled="isRunning" suffix="°C" />
 
 			<div class="param-section-title">PA sweep</div>
-			<v-text-field v-model.number="params.pa_start"    dense outlined hide-details label="PA start"   type="number" min="0"   step="0.001"  class="mb-2" :disabled="isRunning" />
-			<v-text-field v-model.number="params.pa_step"     dense outlined hide-details label="PA step"    type="number" min="0.0005" step="0.0005" class="mb-2" :disabled="isRunning" />
-			<v-text-field v-model.number="params.steps"       dense outlined hide-details label="Steps"      type="number" min="5"   max="200" class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.pa_start"    @change="v => params.pa_start    = parseFloat(v) || 0"     dense outlined hide-details label="PA start"   inputmode="decimal"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.pa_step"     @change="v => params.pa_step     = parseFloat(v) || 0.002" dense outlined hide-details label="PA step"    inputmode="decimal"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.steps"       @change="v => params.steps       = parseInt(v)   || 50"    dense outlined hide-details label="Steps"      inputmode="numeric"  class="mb-2" :disabled="isRunning" />
 			<div class="caption mb-3" style="opacity:0.6">
 				Range: {{ params.pa_start.toFixed(4) }} – {{ paEnd.toFixed(4) }}
 			</div>
 
 			<div class="param-section-title">Speeds (mm/min)</div>
-			<v-text-field v-model.number="params.low_speed"    dense outlined hide-details label="Slow"   type="number" min="100" class="mb-2" :disabled="isRunning" />
-			<v-text-field v-model.number="params.high_speed"   dense outlined hide-details label="Fast"   type="number" min="100" class="mb-2" :disabled="isRunning" />
-			<v-text-field v-model.number="params.travel_speed" dense outlined hide-details label="Travel" type="number" min="100" class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.low_speed"    @change="v => params.low_speed    = parseInt(v) || 1020"  dense outlined hide-details label="Slow"   inputmode="numeric" class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.high_speed"   @change="v => params.high_speed   = parseInt(v) || 10740" dense outlined hide-details label="Fast"   inputmode="numeric" class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.travel_speed" @change="v => params.travel_speed = parseInt(v) || 18000" dense outlined hide-details label="Travel" inputmode="numeric" class="mb-2" :disabled="isRunning" />
 
 			<div class="param-section-title">Z height</div>
-			<v-text-field v-model.number="params.z_height"    dense outlined hide-details label="Z"       type="number" min="5"   class="mb-3" :disabled="isRunning" suffix="mm" />
+			<v-text-field :value="params.z_height"    @change="v => params.z_height     = parseFloat(v) || 50"   dense outlined hide-details label="Z"       inputmode="decimal" class="mb-3" :disabled="isRunning" suffix="mm" />
 
 			<v-divider class="mb-3" />
 
