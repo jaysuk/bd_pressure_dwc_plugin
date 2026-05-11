@@ -675,7 +675,7 @@ export default {
 
 		readStoredPreset() {
 			try {
-				const globals = this.$store.state['machine/model'].global
+				const globals = this.$store.state.machine.model.global
 				let stored = null
 				if (globals instanceof Map) {
 					stored = globals.get('bd_live_hotend_preset')
