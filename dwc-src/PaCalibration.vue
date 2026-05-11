@@ -956,12 +956,14 @@ export default {
 			}
 		},
 
-		createChartSet(refs, rows, best, titleSuffix) {
+		createChartSet(refs, rows, getBest, titleSuffix, getRows) {
 			const d = this.buildChartData(rows)
-			const bounds = this.goodBoundsFor(rows, best)
 
-			const overlayRes   = this.makeOverlayHook(() => best, () => bounds, true)
-			const overlayOther = this.makeOverlayHook(() => best, () => null,   false)
+			// getBest and getRows are getter functions so the overlay always reads the
+			// latest values on every draw call — draw is patched only once at creation.
+			const _getRows = getRows || (() => rows)
+			const overlayRes   = this.makeOverlayHook(getBest, () => this.goodBoundsFor(_getRows(), getBest()), true)
+			const overlayOther = this.makeOverlayHook(getBest, () => null, false)
 
 			const cRes = new Chart(refs.res.getContext('2d'), {
 				type: 'line',
@@ -1005,7 +1007,7 @@ export default {
 			this.destroyLogCharts()
 			const { cRes, cSlopes, cH } = this.createChartSet(
 				{ res: this.$refs.chartRes, slopes: this.$refs.chartSlopes, h: this.$refs.chartH },
-				this.rows, this.best, ''
+				this.rows, () => this.best, ''
 			)
 			this.chartRes = cRes; this.chartSlopes = cSlopes; this.chartH = cH
 		},
@@ -1018,34 +1020,32 @@ export default {
 		updateLiveCharts() {
 			const rows = this.liveRows
 			if (!rows.length) return
-			const best = this.liveBest
 
 			if (!this.liveChartRes) {
+				// Create charts once — overlay is patched once with getter functions,
+				// so it always reads the current liveBest and bounds on every draw call.
 				const { cRes, cSlopes, cH } = this.createChartSet(
 					{ res: this.$refs.liveChartRes, slopes: this.$refs.liveChartSlopes, h: this.$refs.liveChartH },
-					rows, best, ' — live'
+					rows, () => this.liveBest, ' — live', () => this.liveRows
 				)
 				this.liveChartRes = cRes; this.liveChartSlopes = cSlopes; this.liveChartH = cH
 			} else {
+				// Just update data and call update() — the patched draw re-runs with fresh getters.
 				const d = this.buildChartData(rows)
-				const bounds = this.goodBoundsFor(rows, best)
-
-				const overlayRes   = this.makeOverlayHook(() => this.liveBest, () => bounds, true)
-				const overlayOther = this.makeOverlayHook(() => this.liveBest, () => null,   false)
 
 				this.liveChartRes.data.labels = d.pa
 				this.liveChartRes.data.datasets[0].data = d.res
-				this.patchOverlay(this.liveChartRes, overlayRes)
+				this.liveChartRes.update()
 
 				this.liveChartSlopes.data.labels = d.pa
 				this.liveChartSlopes.data.datasets[0].data = d.lk
 				this.liveChartSlopes.data.datasets[1].data = d.rk
-				this.patchOverlay(this.liveChartSlopes, overlayOther)
+				this.liveChartSlopes.update()
 
 				this.liveChartH.data.labels = d.pa
 				this.liveChartH.data.datasets[0].data = d.Hk
 				this.liveChartH.data.datasets[1].data = d.Ha
-				this.patchOverlay(this.liveChartH, overlayOther)
+				this.liveChartH.update()
 			}
 		},
 
