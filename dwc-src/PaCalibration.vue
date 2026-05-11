@@ -379,8 +379,9 @@ canvas {
 							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-format-list-numbered</v-icon>Recommended workflow</div>
 							<ol class="body-2 mb-4" style="padding-left:20px">
 								<li class="mb-1"><strong>First run — wide scan.</strong> Use PA start = 0, step = 0.005, steps = 50 (covers 0–0.245). This finds roughly where the optimum is.</li>
-								<li class="mb-1"><strong>Check the result.</strong> The Analysis panel below the graphs will tell you if the best value is near an edge (suggesting you need to shift the range) or if the curve is flat (suggesting a finer sweep is needed).</li>
-								<li class="mb-1"><strong>Zoom in.</strong> Use the <em>Suggested next sweep</em> values — or click <em>Load into Live Run</em> to fill the parameters automatically — then run again with a finer step around the best value.</li>
+								<li class="mb-1"><strong>Check the Analysis panel.</strong> It will tell you whether the result is clean and trustworthy, or whether the data is too noisy to act on. Follow the suggested action — do not assume "zoom in" is always the right move.</li>
+								<li class="mb-1"><strong>If the result is noisy — repeat first.</strong> Run the same sweep again. If both runs agree on a similar PA value, that is your answer. Only zoom in once you have a consistent result from a coarser sweep.</li>
+								<li class="mb-1"><strong>If the result is clean — zoom in.</strong> Use the <em>Suggested next sweep</em> values — or click <em>Load into Live Run</em> — to refine the result with a finer step around the best value.</li>
 								<li class="mb-1"><strong>Apply.</strong> Click <em>Copy M572</em> on the result badge and paste it into your <code>config.g</code>. Or use the saved <code>/sys/pa_result.g</code> file.</li>
 								<li class="mb-1"><strong>Re-run when things change.</strong> PA is affected by nozzle temperature, filament brand, print speed, and hotend condition. Re-calibrate after significant changes.</li>
 							</ol>
@@ -390,16 +391,16 @@ canvas {
 							<!-- Analysis panel -->
 							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-lightbulb-outline</v-icon>Analysis panel explained</div>
 							<v-simple-table dense class="mb-4">
-								<thead><tr><th>Message</th><th>What it means</th></tr></thead>
+								<thead><tr><th>Message</th><th>What it means</th><th>Action</th></tr></thead>
 								<tbody>
-									<tr><td>Low variability (CV &lt; 20%)</td><td>The sweep was consistent — the result is reliable.</td></tr>
-									<tr><td>Moderate variability (CV 20–40%)</td><td>Some noise in the data. A repeat run would improve confidence.</td></tr>
-									<tr><td>High variability (CV &gt; 40%)</td><td>The data is noisy. Check the sensor is mounted securely and the nozzle temperature has stabilised.</td></tr>
-									<tr><td>Best PA is near the sweep edge</td><td>The true optimum may be outside the range you tested. Shift the sweep in the indicated direction.</td></tr>
-									<tr><td>Best PA is well within range</td><td>The sweep covered the optimum — the result is trustworthy.</td></tr>
-									<tr><td>Flat minimum</td><td>The curve doesn't have a sharp dip. Run again with a finer step to pinpoint the optimum more precisely.</td></tr>
-									<tr><td>Clear minimum</td><td>There is a well-defined lowest point — good confidence in the result.</td></tr>
-									<tr><td>Slope asymmetry</td><td>lk and rk diverge significantly. This can indicate a temperature or flow imbalance in the hotend.</td></tr>
+									<tr><td>Low variability (CV &lt; 20%)</td><td>Sweep was consistent — result is reliable.</td><td>Proceed or zoom in.</td></tr>
+									<tr><td>Moderate variability (CV 20–40%)</td><td>Some noise. Result is usable.</td><td>A repeat run would improve confidence.</td></tr>
+									<tr><td>High noise (CV &gt; 40%)</td><td>The minimum may be a random dip. Sensor or hotend may not be stable.</td><td>Repeat the sweep. Do not zoom in — finer steps make noise worse.</td></tr>
+									<tr><td>Best PA near sweep edge</td><td>The optimum may lie outside the tested range.</td><td>Shift the range in the indicated direction first, then zoom in.</td></tr>
+									<tr><td>No clear minimum</td><td>Best res is close to the sweep average — no strong signal.</td><td>Repeat at the same settings for a consensus result.</td></tr>
+									<tr><td>Clear minimum</td><td>Best point is well below the sweep average — confident result.</td><td>Use as-is, or zoom in for more precision.</td></tr>
+									<tr><td>Persistent slope asymmetry</td><td>lk and rk differ consistently across the whole sweep — this is a hotend geometry characteristic (common with HF/short melt-zone designs), not a calibration problem.</td><td>No action needed. The PA value compensates as well as the geometry allows.</td></tr>
+									<tr><td>Step size already fine but noisy</td><td>Going finer will not improve the result — noise dominates at this resolution.</td><td>Run a coarser confirmation sweep instead.</td></tr>
 								</tbody>
 							</v-simple-table>
 
@@ -785,79 +786,128 @@ export default {
 			const n        = active.length
 			const mean     = resVals.reduce((a, b) => a + b, 0) / n
 			const variance = resVals.reduce((s, v) => s + (v - mean) ** 2, 0) / n
-			const cvPct    = mean > 0 ? (Math.sqrt(variance) / mean) * 100 : 0
+			const stddev   = Math.sqrt(variance)
+			const cvPct    = mean > 0 ? (stddev / mean) * 100 : 0
 			const paMin    = paVals[0], paMax = paVals[paVals.length - 1], paRange = paMax - paMin
 			const step     = meta.pa_step ? parseFloat(meta.pa_step) : null
 			const bestIdx  = active.findIndex(r => r.iter === best.iter)
 			const edgeFrac = paRange > 0 ? Math.min((best.pa - paMin) / paRange, (paMax - best.pa) / paRange) : 0.5
 
-			if (cvPct > 40)      items.push({ icon: 'mdi-alert-outline',        color: 'orange', text: `High variability in res scores (CV ${cvPct.toFixed(0)}%). Consider a second run.` })
-			else if (cvPct > 20) items.push({ icon: 'mdi-information-outline',  color: 'yellow', text: `Moderate variability (CV ${cvPct.toFixed(0)}%). A second run would improve confidence.` })
-			else                 items.push({ icon: 'mdi-check-circle-outline', color: 'green',  text: `Low variability (CV ${cvPct.toFixed(0)}%) — sweep conditions were consistent.` })
+			// --- Variability / noise assessment ---
+			// noisy = the minimum is likely just a random dip, not a real signal
+			const noisy = cvPct > 30
+			if (cvPct > 40)
+				items.push({ icon: 'mdi-alert-outline', color: 'orange',
+					text: `High noise in res scores (CV ${cvPct.toFixed(0)}%). The minimum may be a random dip rather than a real PA optimum. Repeat the sweep to confirm, or check the sensor is firmly mounted and the nozzle has fully stabilised.` })
+			else if (cvPct > 20)
+				items.push({ icon: 'mdi-information-outline', color: 'yellow',
+					text: `Moderate variability (CV ${cvPct.toFixed(0)}%). The result is usable but a second run would improve confidence.` })
+			else
+				items.push({ icon: 'mdi-check-circle-outline', color: 'green',
+					text: `Low variability (CV ${cvPct.toFixed(0)}%) — sweep conditions were consistent.` })
 
+			// --- Range / edge check ---
 			if (edgeFrac < 0.15) {
 				const dir = best.pa - paMin < paMax - best.pa ? 'lower' : 'higher'
-				items.push({ icon: 'mdi-alert-circle-outline', color: 'orange', text: `Best PA (${best.pa.toFixed(dp)}) is near the sweep edge — true optimum may be ${dir}. Shift the range.` })
+				items.push({ icon: 'mdi-alert-circle-outline', color: 'orange',
+					text: `Best PA (${best.pa.toFixed(dp)}) is near the sweep edge — the true optimum may be ${dir}. Shift the range before zooming in.` })
 			} else if (edgeFrac < 0.25) {
-				items.push({ icon: 'mdi-information-outline', color: 'yellow', text: `Best PA (${best.pa.toFixed(dp)}) is close to one edge — consider a follow-up centred on this value.` })
+				items.push({ icon: 'mdi-information-outline', color: 'yellow',
+					text: `Best PA (${best.pa.toFixed(dp)}) is close to one edge — consider a follow-up centred on this value.` })
 			} else {
-				items.push({ icon: 'mdi-check-circle-outline', color: 'green', text: `Best PA (${best.pa.toFixed(dp)}) is well within the sweep range.` })
+				items.push({ icon: 'mdi-check-circle-outline', color: 'green',
+					text: `Best PA (${best.pa.toFixed(dp)}) is well within the sweep range.` })
 			}
 
-			const win = Math.max(2, Math.round(n * 0.12))
-			const nearMean = active.slice(Math.max(0, bestIdx - win), Math.min(active.length - 1, bestIdx + win) + 1).reduce((s, r) => s + r.res, 0) / (win * 2 + 1)
-			if (best.res > 0 && (nearMean - best.res) / best.res < 0.15)
-				items.push({ icon: 'mdi-information-outline', color: 'yellow', text: `The res curve is flat near the minimum — a finer sweep will pinpoint the optimum.` })
+			// --- Minimum sharpness ---
+			// Compare best res against the mean of the whole active set.
+			// A clear minimum sits well below the mean; a noisy plateau does not.
+			const separationPct = mean > 0 ? ((mean - best.res) / mean) * 100 : 0
+			const clearMinimum  = separationPct > 25   // best is >25% below the sweep mean
+			if (!clearMinimum)
+				items.push({ icon: 'mdi-information-outline', color: 'yellow',
+					text: `The res curve has no clear minimum (best res is only ${separationPct.toFixed(0)}% below the sweep average). The recommended PA is the best available from this data but should be treated as approximate.` })
 			else
-				items.push({ icon: 'mdi-check-circle-outline', color: 'green', text: `Clear minimum with good separation from surrounding values.` })
+				items.push({ icon: 'mdi-check-circle-outline', color: 'green',
+					text: `Clear minimum — best res is ${separationPct.toFixed(0)}% below the sweep average.` })
 
+			// --- Slope asymmetry ---
 			const lkMean = active.reduce((s, r) => s + r.lk, 0) / n
 			const rkMean = active.reduce((s, r) => s + r.rk, 0) / n
 			if (lkMean > 0 && rkMean > 0) {
-				if (Math.abs(lkMean - rkMean) / Math.max(lkMean, rkMean) > 0.4)
-					items.push({ icon: 'mdi-swap-horizontal', color: 'orange', text: `Significant slope asymmetry (lk avg ${lkMean.toFixed(1)}, rk avg ${rkMean.toFixed(1)}) — may indicate a hotend temperature or flow asymmetry.` })
+				const asymRatio = Math.abs(lkMean - rkMean) / Math.max(lkMean, rkMean)
+				if (asymRatio > 0.4)
+					items.push({ icon: 'mdi-swap-horizontal', color: 'orange',
+						text: `Persistent slope asymmetry across the sweep (lk avg ${lkMean.toFixed(1)}, rk avg ${rkMean.toFixed(1)}). This is a hotend characteristic — often seen with short melt-zone designs (e.g. HF/HV nozzles) — rather than a calibration problem. The recommended PA compensates as well as possible for this geometry.` })
 				else
-					items.push({ icon: 'mdi-check-circle-outline', color: 'green', text: `Slopes are reasonably symmetric (lk avg ${lkMean.toFixed(1)}, rk avg ${rkMean.toFixed(1)}).` })
+					items.push({ icon: 'mdi-check-circle-outline', color: 'green',
+						text: `Slopes are reasonably symmetric (lk avg ${lkMean.toFixed(1)}, rk avg ${rkMean.toFixed(1)}).` })
 			}
 
-			// Note if composite scoring shifted the winner away from the raw res minimum
+			// --- Composite score note ---
 			const rawBest = active.reduce((a, b) => b.res < a.res ? b : a)
-			if (best && rawBest && rawBest.iter !== best.iter) {
-				items.push({
-					icon: 'mdi-information-outline', color: 'blue',
-					text: `Slope-weighted scoring selected PA ${best.pa.toFixed(dp)} (res=${best.res}, asym=${Math.abs(best.lk - best.rk)}) over raw minimum PA ${rawBest.pa.toFixed(dp)} (res=${rawBest.res}, asym=${Math.abs(rawBest.lk - rawBest.rk)}) — the selected point has better slope symmetry.`,
-				})
+			if (rawBest.iter !== best.iter) {
+				items.push({ icon: 'mdi-information-outline', color: 'blue',
+					text: `Slope-weighted scoring selected PA ${best.pa.toFixed(dp)} (res=${best.res}, asym=${Math.abs(best.lk - best.rk)}) over the raw res minimum PA ${rawBest.pa.toFixed(dp)} (res=${rawBest.res}, asym=${Math.abs(rawBest.lk - rawBest.rk)}) — better slope symmetry.` })
 			}
 
+			// --- Next sweep recommendation ---
+			// Decision tree:
+			//   noisy + step already fine  → repeat at same or coarser settings (zooming in makes noise worse)
+			//   noisy + step coarse        → repeat at same settings for confirmation
+			//   edge hit                   → shift range, keep step
+			//   clear minimum              → zoom in
+			//   flat but not noisy         → zoom in (genuine flat optimum, sensor is resolving it)
 			let nextSweep = null
 			if (step !== null) {
-				const minUsefulStep = 0.0001
-				if (step <= minUsefulStep) {
-					items.push({ icon: 'mdi-information-outline', color: 'yellow', text: `Step size (${step}) is at the sensor resolution limit — further zoom-in is unlikely to improve accuracy. The variation in res at this scale is sensor noise rather than a real PA signal.` })
-				} else {
+				const minUsefulStep = 0.0005   // below this, sensor noise dominates
+				const stepIsFine    = step <= minUsefulStep
+
+				if (noisy && stepIsFine) {
+					// Already fine-stepping into noise — going finer won't help
+					items.push({ icon: 'mdi-alert-outline', color: 'orange',
+						text: `The step size (${step}) is already fine but the results are noisy — zooming in further will not improve accuracy. Try repeating this sweep to get a consensus result, or run a coarser sweep (step ≥ 0.005) to confirm the rough PA region first.` })
+					const coarseStep   = 0.005
+					const coarseStart  = parseFloat(Math.max(0, best.pa - coarseStep * 10).toPrecision(4))
+					const coarseEnd    = parseFloat((coarseStart + coarseStep * 20).toPrecision(4))
+					const coarseSteps  = 20
+					nextSweep = {
+						reason: `Run a coarser confirmation sweep centred on the current best PA to check whether this result is consistent.`,
+						code:   `pa_start = ${coarseStart}\npa_step  = ${coarseStep}\nsteps    = ${coarseSteps}  ; covers ${coarseStart.toFixed(4)}–${coarseEnd.toFixed(4)}`,
+						params: { pa_start: coarseStart, pa_step: coarseStep, steps: coarseSteps },
+					}
+				} else if (noisy) {
+					// Coarse step but noisy — repeat for confirmation
+					nextSweep = {
+						reason: `The sweep was noisy. Repeat with the same settings to confirm the result — if the recommended PA is consistent across two runs, use it.`,
+						code:   `pa_start = ${paMin.toFixed(dp)}\npa_step  = ${step}\nsteps    = ${active.length}  ; same range`,
+						params: { pa_start: paMin, pa_step: step, steps: active.length },
+					}
+				} else if (edgeFrac < 0.15) {
+					// Confident result but near edge — shift range
+					const dir = best.pa - paMin < paMax - best.pa ? -1 : 1
+					const ss  = parseFloat(Math.max(0, best.pa + dir * paRange * 0.4).toPrecision(dp))
+					const se  = parseFloat((ss + paRange).toPrecision(dp))
+					const sn  = Math.round(paRange / step)
+					nextSweep = {
+						reason: `Shift the sweep range to centre the minimum.`,
+						code:   `pa_start = ${ss}\npa_step  = ${step}\nsteps    = ${sn}  ; covers ${ss.toFixed(dp)}–${se.toFixed(dp)}`,
+						params: { pa_start: ss, pa_step: step, steps: sn },
+					}
+				} else if (!stepIsFine) {
+					// Clean result, step has room to go finer — zoom in
 					const fineStep  = parseFloat((step / 4).toPrecision(3))
 					const fineDp    = Math.min(Math.ceil(-Math.log10(fineStep)) + 1, 7)
 					const fineStart = parseFloat(Math.max(0, best.pa - fineStep * 15).toPrecision(fineDp))
 					const fineEnd   = parseFloat((best.pa + fineStep * 15).toPrecision(fineDp))
 					const fineSteps = Math.round((fineEnd - fineStart) / fineStep)
-					if (edgeFrac < 0.15) {
-						const dir = best.pa - paMin < paMax - best.pa ? -1 : 1
-						const ss  = parseFloat(Math.max(0, best.pa + dir * paRange * 0.4).toPrecision(dp))
-						const se  = parseFloat((ss + paRange).toPrecision(dp))
-						const sn  = Math.round(paRange / step)
-						nextSweep = {
-							reason: `Shift the sweep range to keep the minimum centred.`,
-							code:   `var pa_start = ${ss}\nvar pa_step  = ${step}\nvar steps    = ${sn}  ; covers ${ss.toFixed(dp)}–${se.toFixed(dp)}`,
-							params: { pa_start: ss, pa_step: step, steps: sn },
-						}
-					} else {
-						nextSweep = {
-							reason: `Zoom in around ${best.pa.toFixed(dp)} with a finer step (${fineStep}).`,
-							code:   `var pa_start = ${fineStart}\nvar pa_step  = ${fineStep}\nvar steps    = ${fineSteps}  ; covers ${fineStart.toFixed(fineDp)}–${fineEnd.toFixed(fineDp)}`,
-							params: { pa_start: fineStart, pa_step: fineStep, steps: fineSteps },
-						}
+					nextSweep = {
+						reason: `Good clean result — zoom in around ${best.pa.toFixed(dp)} with a finer step (${fineStep}) to pin down the exact optimum.`,
+						code:   `pa_start = ${fineStart}\npa_step  = ${fineStep}\nsteps    = ${fineSteps}  ; covers ${fineStart.toFixed(fineDp)}–${fineEnd.toFixed(fineDp)}`,
+						params: { pa_start: fineStart, pa_step: fineStep, steps: fineSteps },
 					}
 				}
+				// If step is already fine and result is clean — no further suggestion needed
 			}
 			return { items, nextSweep }
 		},
