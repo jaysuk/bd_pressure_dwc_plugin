@@ -113,7 +113,10 @@ canvas {
 
 			<v-divider class="mb-3" />
 
-			<v-btn block color="success" :disabled="isRunning" @click="startCalibration" class="mb-2">
+			<v-alert v-if="hotendPreset === 'unknown'" type="info" dense class="mb-2 caption">
+				Select a hotend type above to enable calibration.
+			</v-alert>
+			<v-btn block color="success" :disabled="isRunning || hotendPreset === 'unknown'" @click="startCalibration" class="mb-2">
 				<v-icon left small>mdi-play</v-icon>Start
 			</v-btn>
 			<v-btn block color="error" :disabled="!isRunning" @click="stopCalibration" outlined>
@@ -482,6 +485,14 @@ const POLL_INTERVAL_MS = 2000
 // pa_max is a soft ceiling used to warn if the result looks unexpectedly high/low
 const HOTEND_PRESETS = [
 	{
+		id: 'unknown',
+		label: '— Select hotend type —',
+		group: null,
+		pa_start: 0, pa_step: 0.005, steps: 50,
+		pa_min_expected: 0, pa_max_expected: null,
+		note: null,
+	},
+	{
 		id: 'custom',
 		label: 'Custom',
 		group: null,
@@ -538,7 +549,7 @@ export default {
 		return {
 			activeTab: 0,
 
-			hotendPreset: 'custom',
+			hotendPreset: 'unknown',
 
 			params: {
 				tool:          0,
@@ -638,11 +649,23 @@ export default {
 		darkTheme(dark) { this.applyTheme(dark) },
 		hotendPreset(id) {
 			const p = HOTEND_PRESETS.find(x => x.id === id)
-			if (!p || id === 'custom') return
+			if (!p || id === 'custom' || id === 'unknown') return
 			this.params.pa_start = p.pa_start
 			this.params.pa_step  = p.pa_step
 			this.params.steps    = p.steps
 		},
+	},
+
+	mounted() {
+		// Pre-select hotend preset if the user has configured a persistent default
+		// in bd_globals.g (global.bd_live_hotend_preset will already be in the model)
+		try {
+			const globals = this.$store.state['machine/model'].global
+			const stored  = globals instanceof Map ? globals.get('bd_live_hotend_preset') : null
+			if (stored && stored !== 'unknown' && HOTEND_PRESETS.find(p => p.id === stored)) {
+				this.hotendPreset = stored
+			}
+		} catch (_) {}
 	},
 
 	beforeDestroy() {
