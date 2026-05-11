@@ -675,18 +675,20 @@ export default {
 
 		readStoredPreset() {
 			try {
-				const model   = this.$store.state['machine/model']
-				const globals = model && model.global
-				console.log('[bd_pressure] mounted globals type:', globals ? (globals instanceof Map ? 'Map' : typeof globals) : 'null/undefined')
-				console.log('[bd_pressure] mounted globals:', globals)
-				const stored  = globals instanceof Map
-					? globals.get('bd_live_hotend_preset')
-					: (globals && globals['bd_live_hotend_preset'])
-				console.log('[bd_pressure] stored preset:', stored)
+				const globals = this.$store.state['machine/model'].global
+				let stored = null
+				if (globals instanceof Map) {
+					stored = globals.get('bd_live_hotend_preset')
+				} else if (Array.isArray(globals)) {
+					const entry = globals.find(g => g.key === 'bd_live_hotend_preset')
+					stored = entry ? entry.value : null
+				} else if (globals && typeof globals === 'object') {
+					stored = globals['bd_live_hotend_preset']
+				}
 				if (stored && stored !== 'unknown' && HOTEND_PRESETS.find(p => p.id === stored)) {
 					this.hotendPreset = stored
 				}
-			} catch (e) { console.log('[bd_pressure] readStoredPreset error:', e) }
+			} catch (_) {}
 		},
 
 		// ------------------------------------------------------------------ live run
