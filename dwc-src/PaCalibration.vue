@@ -85,7 +85,7 @@ canvas {
 			<v-text-field :value="params.pa_step"     @change="v => params.pa_step     = parseFloat(v) || 0.002" dense outlined hide-details label="PA step"    inputmode="decimal"  class="mb-2" :disabled="isRunning" />
 			<v-text-field :value="params.steps"       @change="v => params.steps       = parseInt(v)   || 50"    dense outlined hide-details label="Steps"      inputmode="numeric"  class="mb-2" :disabled="isRunning" />
 			<div class="caption mb-3" style="opacity:0.6">
-				Range: {{ params.pa_start.toFixed(4) }} – {{ paEnd.toFixed(4) }}
+				Range: {{ params.pa_start.toFixed(livePaDecimals) }} – {{ paEnd.toFixed(livePaDecimals) }}
 			</div>
 
 			<div class="param-section-title">Speeds (mm/min)</div>
@@ -118,11 +118,11 @@ canvas {
 					<span v-else-if="liveStatus.state === 'priming'">Priming…</span>
 					<span v-else-if="liveStatus.state === 'running'">
 						Step {{ liveStatus.step }} / {{ liveStatus.steps }}<br>
-						<span style="opacity:0.7">PA {{ (liveStatus.pa || 0).toFixed(4) }}</span>
+						<span style="opacity:0.7">PA {{ (liveStatus.pa || 0).toFixed(livePaDecimals) }}</span>
 					</span>
 					<span v-else-if="liveStatus.state === 'done'">
 						<v-icon small color="success">mdi-check-circle</v-icon>
-						Done — best PA {{ (liveStatus.best_pa || 0).toFixed(4) }}
+						Done — best PA {{ (liveStatus.best_pa || 0).toFixed(livePaDecimals) }}
 					</span>
 					<span v-else-if="liveStatus.state === 'aborted'">
 						<v-icon small color="warning">mdi-alert</v-icon> Aborted
@@ -174,11 +174,11 @@ canvas {
 							</div>
 
 							<v-alert v-if="liveBest" type="success" dense class="mb-2">
-								<span class="best-badge">Best PA so far = {{ liveBest.pa.toFixed(4) }}</span>
+								<span class="best-badge">Best PA so far = {{ liveBest.pa.toFixed(livePaDecimals) }}</span>
 								&nbsp;—&nbsp; res={{ liveBest.res }}
 								<v-btn v-if="liveStatus.state === 'done'" small outlined class="ml-3" color="white" @click="copyLiveM572">
 									<v-icon left small>mdi-content-copy</v-icon>
-									Copy M572 D{{ params.extruder }} S{{ liveBest.pa.toFixed(4) }}
+									Copy M572 D{{ params.extruder }} S{{ liveBest.pa.toFixed(livePaDecimals) }}
 								</v-btn>
 							</v-alert>
 							<v-snackbar v-model="copiedLive" timeout="2000" color="success" top>M572 command copied</v-snackbar>
@@ -228,11 +228,11 @@ canvas {
 								</div>
 
 								<v-alert type="success" dense class="mb-3" v-if="best">
-									<span class="best-badge">Best PA = {{ best.pa.toFixed(4) }}</span>
+									<span class="best-badge">Best PA = {{ best.pa.toFixed(logPaDecimals) }}</span>
 									&nbsp;—&nbsp; res={{ best.res }}&nbsp; lk={{ best.lk }}&nbsp; rk={{ best.rk }}&nbsp; Hk={{ best.Hk }}&nbsp; Ha={{ best.Ha }}
 									<v-btn small outlined class="ml-3" color="white" @click="copyM572">
 										<v-icon left small>mdi-content-copy</v-icon>
-										Copy M572 D{{ logExtruderIndex }} S{{ best.pa.toFixed(4) }}
+										Copy M572 D{{ logExtruderIndex }} S{{ best.pa.toFixed(logPaDecimals) }}
 									</v-btn>
 								</v-alert>
 								<v-snackbar v-model="copied" timeout="2000" color="success" top>M572 command copied to clipboard</v-snackbar>
@@ -272,7 +272,7 @@ canvas {
 												<thead><tr><th>iter</th><th>PA</th><th>res</th><th>lk</th><th>rk</th><th>Hk</th><th>Ha</th></tr></thead>
 												<tbody>
 													<tr v-for="r in rows" :key="r.iter" :class="best && r.iter === best.iter ? 'green lighten-4' : ''">
-														<td>{{ r.iter }}</td><td>{{ r.pa.toFixed(4) }}</td><td>{{ r.res }}</td>
+														<td>{{ r.iter }}</td><td>{{ r.pa.toFixed(logPaDecimals) }}</td><td>{{ r.res }}</td>
 														<td>{{ r.lk }}</td><td>{{ r.rk }}</td><td>{{ r.Hk }}</td><td>{{ r.Ha }}</td>
 													</tr>
 												</tbody>
@@ -512,6 +512,14 @@ export default {
 			const e = parseInt(this.meta.extruder)
 			return isNaN(e) ? 0 : e
 		},
+		// Decimal places needed to distinguish consecutive PA labels,
+		// derived from the step size in the data. Minimum 4, max 7.
+		logPaDecimals() {
+			return this.paDecimalsFor(this.rows)
+		},
+		livePaDecimals() {
+			return this.paDecimalsFor(this.liveRows)
+		},
 		...mapState('settings', ['darkTheme']),
 	},
 
@@ -654,7 +662,7 @@ export default {
 
 		copyLiveM572() {
 			if (!this.liveBest) return
-			navigator.clipboard.writeText(`M572 D${this.params.extruder} S${this.liveBest.pa.toFixed(4)}`)
+			navigator.clipboard.writeText(`M572 D${this.params.extruder} S${this.liveBest.pa.toFixed(livePaDecimals)}`)
 				.then(() => { this.copiedLive = true })
 		},
 
@@ -741,7 +749,7 @@ export default {
 			this.meta = meta
 			this.rows = parsed
 			this.best = this.findBest(parsed)
-			this.analysis = this.analyseData(parsed, this.best, meta)
+			this.analysis = this.analyseData(parsed, this.best, meta, this.paDecimalsFor(parsed))
 			this.$nextTick(() => this.drawLogCharts())
 		},
 
@@ -751,7 +759,8 @@ export default {
 			return candidates.reduce((a, b) => b.res < a.res ? b : a)
 		},
 
-		analyseData(rows, best, meta) {
+		analyseData(rows, best, meta, dp) {
+			dp = dp || 4
 			const items = []
 			const active = rows.filter(r => r.iter >= WARM_UP_SKIP && r.res > 0)
 			if (!active.length || !best) return { items, nextSweep: null }
@@ -772,11 +781,11 @@ export default {
 
 			if (edgeFrac < 0.15) {
 				const dir = best.pa - paMin < paMax - best.pa ? 'lower' : 'higher'
-				items.push({ icon: 'mdi-alert-circle-outline', color: 'orange', text: `Best PA (${best.pa.toFixed(4)}) is near the sweep edge — true optimum may be ${dir}. Shift the range.` })
+				items.push({ icon: 'mdi-alert-circle-outline', color: 'orange', text: `Best PA (${best.pa.toFixed(dp)}) is near the sweep edge — true optimum may be ${dir}. Shift the range.` })
 			} else if (edgeFrac < 0.25) {
-				items.push({ icon: 'mdi-information-outline', color: 'yellow', text: `Best PA (${best.pa.toFixed(4)}) is close to one edge — consider a follow-up centred on this value.` })
+				items.push({ icon: 'mdi-information-outline', color: 'yellow', text: `Best PA (${best.pa.toFixed(dp)}) is close to one edge — consider a follow-up centred on this value.` })
 			} else {
-				items.push({ icon: 'mdi-check-circle-outline', color: 'green', text: `Best PA (${best.pa.toFixed(4)}) is well within the sweep range.` })
+				items.push({ icon: 'mdi-check-circle-outline', color: 'green', text: `Best PA (${best.pa.toFixed(dp)}) is well within the sweep range.` })
 			}
 
 			const win = Math.max(2, Math.round(n * 0.12))
@@ -797,25 +806,31 @@ export default {
 
 			let nextSweep = null
 			if (step !== null) {
-				const fineStep  = parseFloat((step / 4).toPrecision(3))
-				const fineStart = parseFloat(Math.max(0, best.pa - fineStep * 15).toPrecision(4))
-				const fineEnd   = parseFloat((best.pa + fineStep * 15).toPrecision(4))
-				const fineSteps = Math.round((fineEnd - fineStart) / fineStep)
-				if (edgeFrac < 0.15) {
-					const dir = best.pa - paMin < paMax - best.pa ? -1 : 1
-					const ss  = parseFloat(Math.max(0, best.pa + dir * paRange * 0.4).toPrecision(4))
-					const se  = parseFloat((ss + paRange).toPrecision(4))
-					const sn  = Math.round(paRange / step)
-					nextSweep = {
-						reason: `Shift the sweep range to keep the minimum centred.`,
-						code:   `var pa_start = ${ss}\nvar pa_step  = ${step}\nvar steps    = ${sn}  ; covers ${ss.toFixed(4)}–${se.toFixed(4)}`,
-						params: { pa_start: ss, pa_step: step, steps: sn },
-					}
+				const minUsefulStep = 0.0001
+				if (step <= minUsefulStep) {
+					items.push({ icon: 'mdi-information-outline', color: 'yellow', text: `Step size (${step}) is at the sensor resolution limit — further zoom-in is unlikely to improve accuracy. The variation in res at this scale is sensor noise rather than a real PA signal.` })
 				} else {
-					nextSweep = {
-						reason: `Zoom in around ${best.pa.toFixed(4)} with a finer step (${fineStep}).`,
-						code:   `var pa_start = ${fineStart}\nvar pa_step  = ${fineStep}\nvar steps    = ${fineSteps}  ; covers ${fineStart.toFixed(4)}–${fineEnd.toFixed(4)}`,
-						params: { pa_start: fineStart, pa_step: fineStep, steps: fineSteps },
+					const fineStep  = parseFloat((step / 4).toPrecision(3))
+					const fineDp    = Math.min(Math.ceil(-Math.log10(fineStep)) + 1, 7)
+					const fineStart = parseFloat(Math.max(0, best.pa - fineStep * 15).toPrecision(fineDp))
+					const fineEnd   = parseFloat((best.pa + fineStep * 15).toPrecision(fineDp))
+					const fineSteps = Math.round((fineEnd - fineStart) / fineStep)
+					if (edgeFrac < 0.15) {
+						const dir = best.pa - paMin < paMax - best.pa ? -1 : 1
+						const ss  = parseFloat(Math.max(0, best.pa + dir * paRange * 0.4).toPrecision(dp))
+						const se  = parseFloat((ss + paRange).toPrecision(dp))
+						const sn  = Math.round(paRange / step)
+						nextSweep = {
+							reason: `Shift the sweep range to keep the minimum centred.`,
+							code:   `var pa_start = ${ss}\nvar pa_step  = ${step}\nvar steps    = ${sn}  ; covers ${ss.toFixed(dp)}–${se.toFixed(dp)}`,
+							params: { pa_start: ss, pa_step: step, steps: sn },
+						}
+					} else {
+						nextSweep = {
+							reason: `Zoom in around ${best.pa.toFixed(dp)} with a finer step (${fineStep}).`,
+							code:   `var pa_start = ${fineStart}\nvar pa_step  = ${fineStep}\nvar steps    = ${fineSteps}  ; covers ${fineStart.toFixed(fineDp)}–${fineEnd.toFixed(fineDp)}`,
+							params: { pa_start: fineStart, pa_step: fineStep, steps: fineSteps },
+						}
 					}
 				}
 			}
@@ -881,10 +896,11 @@ export default {
 			}
 		},
 
-		makeOverlayHook(getBest, getGoodBounds, drawZone) {
+		makeOverlayHook(getBest, getGoodBounds, drawZone, getDecimals) {
 			return (chart) => {
 				const best = getBest()
 				if (!best) return
+				const dp  = getDecimals ? getDecimals() : 4
 				const ctx = chart.ctx
 				const { top, bottom, left, right } = chart.chartArea
 				const labels = chart.data.labels
@@ -893,8 +909,8 @@ export default {
 					const bounds = getGoodBounds()
 					if (bounds) {
 						const { gs, ge } = bounds
-						const idxL = labels.indexOf(gs.pa.toFixed(4))
-						const idxR = labels.indexOf(ge.pa.toFixed(4))
+						const idxL = labels.indexOf(gs.pa.toFixed(dp))
+						const idxR = labels.indexOf(ge.pa.toFixed(dp))
 						if (idxL >= 0 && idxR >= 0) {
 							const m  = chart.getDatasetMeta(0)
 							const xL = m.data[idxL] ? m.data[idxL]._model.x : left
@@ -907,7 +923,7 @@ export default {
 					}
 				}
 
-				const idx = labels.indexOf(best.pa.toFixed(4))
+				const idx = labels.indexOf(best.pa.toFixed(dp))
 				if (idx < 0) return
 				const m = chart.getDatasetMeta(0)
 				if (!m.data[idx]) return
@@ -925,7 +941,7 @@ export default {
 				ctx.font = 'bold 10px sans-serif'
 				const rightHalf = x > (left + right) / 2
 				ctx.textAlign = rightHalf ? 'right' : 'left'
-				ctx.fillText(`best ${best.pa.toFixed(4)}`, rightHalf ? x - 4 : x + 4, top + 12)
+				ctx.fillText(`best ${best.pa.toFixed(dp)}`, rightHalf ? x - 4 : x + 4, top + 12)
 				ctx.restore()
 			}
 		},
@@ -951,9 +967,24 @@ export default {
 			return { gs: active[lo], ge: active[hi] }
 		},
 
-		buildChartData(rows) {
+		paDecimalsFor(rows) {
+			if (rows.length < 2) return 4
+			// Find the smallest difference between consecutive PA values
+			let minDiff = Infinity
+			for (let i = 1; i < rows.length; i++) {
+				const d = Math.abs(rows[i].pa - rows[i-1].pa)
+				if (d > 0 && d < minDiff) minDiff = d
+			}
+			if (!isFinite(minDiff)) return 4
+			// Need enough decimals so minDiff rounds to a non-zero value
+			const needed = Math.ceil(-Math.log10(minDiff)) + 1
+			return Math.min(Math.max(needed, 4), 7)
+		},
+
+		buildChartData(rows, decimals) {
+			const dp = decimals !== undefined ? decimals : this.paDecimalsFor(rows)
 			return {
-				pa:  rows.map(r => r.pa.toFixed(4)),
+				pa:  rows.map(r => r.pa.toFixed(dp)),
 				res: rows.map(r => r.res),
 				lk:  rows.map(r => r.lk),
 				rk:  rows.map(r => r.rk),
@@ -963,13 +994,13 @@ export default {
 		},
 
 		createChartSet(refs, rows, getBest, titleSuffix, getRows) {
-			const d = this.buildChartData(rows)
+			const _getRows  = getRows || (() => rows)
+			const getDp     = () => this.paDecimalsFor(_getRows())
+			const d = this.buildChartData(rows, getDp())
 
-			// getBest and getRows are getter functions so the overlay always reads the
-			// latest values on every draw call — draw is patched only once at creation.
-			const _getRows = getRows || (() => rows)
-			const overlayRes   = this.makeOverlayHook(getBest, () => this.goodBoundsFor(_getRows(), getBest()), true)
-			const overlayOther = this.makeOverlayHook(getBest, () => null, false)
+			// All getter functions are evaluated fresh on every draw call.
+			const overlayRes   = this.makeOverlayHook(getBest, () => this.goodBoundsFor(_getRows(), getBest()), true,  getDp)
+			const overlayOther = this.makeOverlayHook(getBest, () => null,                                      false, getDp)
 
 			const cRes = new Chart(refs.res.getContext('2d'), {
 				type: 'line',
@@ -1037,7 +1068,7 @@ export default {
 				this.liveChartRes = cRes; this.liveChartSlopes = cSlopes; this.liveChartH = cH
 			} else {
 				// Just update data and call update() — the patched draw re-runs with fresh getters.
-				const d = this.buildChartData(rows)
+				const d = this.buildChartData(rows, this.livePaDecimals)
 
 				this.liveChartRes.data.labels = d.pa
 				this.liveChartRes.data.datasets[0].data = d.res
@@ -1064,7 +1095,7 @@ export default {
 
 		copyM572() {
 			if (!this.best) return
-			navigator.clipboard.writeText(`M572 D${this.logExtruderIndex} S${this.best.pa.toFixed(4)}`).then(() => { this.copied = true })
+			navigator.clipboard.writeText(`M572 D${this.logExtruderIndex} S${this.best.pa.toFixed(logPaDecimals)}`).then(() => { this.copied = true })
 		},
 		copyNextSweep() {
 			if (!this.analysis.nextSweep) return
@@ -1072,7 +1103,7 @@ export default {
 		},
 		copyLiveM572() {
 			if (!this.liveBest) return
-			navigator.clipboard.writeText(`M572 D${this.params.extruder} S${this.liveBest.pa.toFixed(4)}`).then(() => { this.copiedLive = true })
+			navigator.clipboard.writeText(`M572 D${this.params.extruder} S${this.liveBest.pa.toFixed(livePaDecimals)}`).then(() => { this.copiedLive = true })
 		},
 		clearData() {
 			this.destroyLogCharts()
