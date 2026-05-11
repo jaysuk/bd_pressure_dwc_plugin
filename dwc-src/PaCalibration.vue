@@ -344,17 +344,19 @@ canvas {
 
 							<!-- Parameters -->
 							<div class="subtitle-1 mb-1"><v-icon small left color="primary">mdi-tune</v-icon>Parameter guide</div>
-							<p class="body-2 mb-2">Select your hotend type to automatically set a sensible PA sweep range. You can adjust any value afterwards — changing PA start, step, or steps will switch the selector back to <em>Custom</em>.</p>
+							<p class="body-2 mb-2">Select your hotend type to automatically set a sensible PA sweep range and enable range checking in the Analysis panel. You can adjust any value afterwards — changing PA start, step, or steps will switch the selector back to <em>Custom</em>. The Start button is disabled until a hotend type is selected.</p>
 							<v-simple-table dense class="mb-3">
-								<thead><tr><th>Hotend type</th><th>Typical PA range</th><th>Examples</th></tr></thead>
+								<thead><tr><th>Hotend type</th><th>Typical PA range</th><th>Step</th><th>Examples</th></tr></thead>
 								<tbody>
-									<tr><td><strong>Short melt zone</strong></td><td>0 – 0.10</td><td>E3D Revo, Slice Mosquito, Dragon HF, NF-Crazy</td></tr>
-									<tr><td><strong>Standard</strong></td><td>0.02 – 0.18</td><td>E3D V6, Dragon ST, Rapido HF, Dragonfly, Spider, Bambu X1/P1/A1</td></tr>
-									<tr><td><strong>High flow / long melt zone</strong></td><td>0.04 – 0.30</td><td>E3D Volcano, Rapido UHF, Dragon UHF, Goliath (50 mm melt zone), Mosquito Magnum+</td></tr>
-									<tr><td><strong>Bowden</strong></td><td>0.3 – 1.5</td><td>Any hotend with a Bowden tube — tube length matters more than hotend type</td></tr>
+									<tr><td><strong>Short melt zone</strong></td><td>0 – 0.10</td><td>0.002</td><td>E3D Revo (all variants), Slice Mosquito, Phaetus Dragon HF</td></tr>
+									<tr><td><strong>Standard</strong></td><td>0 – 0.25</td><td>0.005</td><td>E3D V6, Dragon ST, Rapido HF (v1/v2), Dragonfly, Bambu X1/P1/A1, Creality Spider</td></tr>
+									<tr><td><strong>High flow / long melt zone</strong></td><td>0 – 0.25</td><td>0.005</td><td>E3D Volcano, Rapido UHF, Dragon UHF, VzBot Goliath (50 mm melt zone), Mosquito Magnum+</td></tr>
+									<tr><td><strong>Bowden</strong></td><td>0.3 – 1.5</td><td>0.02</td><td>Any hotend with a Bowden tube — tube length matters more than hotend type</td></tr>
+									<tr><td><strong>Custom</strong></td><td>—</td><td>—</td><td>Manual entry, no range checking</td></tr>
 								</tbody>
 							</v-simple-table>
-							<p class="body-2 mb-4">If you are unsure, use <em>Standard</em> — it covers the most common PA range and the Analysis panel will tell you if the result falls outside what is expected.</p>
+							<p class="body-2 mb-2">If you are unsure, use <em>Standard</em> — it covers the most common PA range and the Analysis panel will flag if the result looks unexpectedly high or low.</p>
+							<p class="body-2 mb-4">To avoid selecting your hotend type every session, uncomment the two lines in <code>/sys/bd_globals.g</code> and set your preset value — the plugin reads the stored value automatically on load.</p>
 
 							<v-simple-table dense class="mb-4">
 								<thead><tr><th>Parameter</th><th>What it does</th><th>Suggested starting point</th></tr></thead>
