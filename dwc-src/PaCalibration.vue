@@ -175,7 +175,7 @@ canvas {
 
 							<v-alert v-if="liveBest" type="success" dense class="mb-2">
 								<span class="best-badge">Best PA so far = {{ liveBest.pa.toFixed(livePaDecimals) }}</span>
-								&nbsp;—&nbsp; res={{ liveBest.res }}
+								&nbsp;—&nbsp; res={{ liveBest.res }}, lk={{ liveBest.lk }}, rk={{ liveBest.rk }}
 								<v-btn v-if="liveStatus.state === 'done'" small outlined class="ml-3" color="white" @click="copyLiveM572">
 									<v-icon left small>mdi-content-copy</v-icon>
 									Copy M572 D{{ params.extruder }} S{{ liveBest.pa.toFixed(livePaDecimals) }}
@@ -346,10 +346,12 @@ canvas {
 							<div class="subtitle-2 mb-1">Graph 1 — Pressure score (res)</div>
 							<p class="body-2">This is the primary result. <strong>Lower is better</strong> — res measures how far from ideal the pressure profile was during that extrusion move. The algorithm inside the bd_pressure sensor computes this from the raw strain data.</p>
 							<ul class="body-2 mb-3" style="padding-left:20px">
-								<li>The <strong>red dashed vertical line</strong> marks the PA value with the lowest res score — this is the recommended value.</li>
-								<li>The <strong>green shaded band</strong> covers the contiguous range of PA values around the best point whose res score stays within 20% of the minimum. Any value in this band will perform similarly well in practice. A wide band means the printer is forgiving; a narrow band means precision matters.</li>
-								<li>The first few iterations are skipped when finding the best value (warm-up allowance) — this is why the red line may not be at the absolute minimum of the curve if the curve dips right at the start.</li>
+								<li>The <strong>red dashed vertical line</strong> marks the recommended PA value — selected using a composite score that combines res with a slope-symmetry penalty (see below).</li>
+								<li>The <strong>green shaded band</strong> covers the contiguous range of PA values around the best point whose composite score stays within 20% of the minimum. Any value in this band will perform similarly well in practice. A wide band means the printer is forgiving; a narrow band means precision matters.</li>
+								<li>The first {{ warmUpSkip }} iterations are skipped when finding the best value (sensor warm-up allowance) — this prevents a spurious low reading from the very first passes being selected.</li>
 							</ul>
+							<div class="subtitle-2 mb-1">How the best PA is selected</div>
+							<p class="body-2 mb-3">The plugin uses a composite score: <code>score = res + 0.5 × |lk − rk|</code>. This adds a small penalty for slope asymmetry so that a symmetric point can edge out an asymmetric one even if the raw res is slightly higher. If the slope-weighted winner differs from the raw res minimum, the Analysis panel will tell you.</p>
 
 							<div class="subtitle-2 mb-1">Graph 2 — Slopes (lk / rk)</div>
 							<p class="body-2">These measure the shape of the pressure transition on each side of the fast section.</p>
@@ -439,7 +441,8 @@ import { mapState } from 'vuex'
 
 const LOG_PATH        = '0:/sys/pa_calibrate_log.txt'
 const STATUS_PATH     = '0:/sys/pa_live_status.txt'
-const WARM_UP_SKIP    = 5
+const WARM_UP_SKIP    = 8
+const SLOPE_ASYM_PENALTY = 0.5   // added to composite score per unit |lk - rk|
 const POLL_INTERVAL_MS = 2000
 
 export default {
@@ -503,7 +506,7 @@ export default {
 		liveBest() {
 			const active = this.liveRows.filter(r => r.iter >= WARM_UP_SKIP && r.res > 0)
 			if (!active.length) return null
-			return active.reduce((a, b) => b.res < a.res ? b : a)
+			return active.reduce((a, b) => this.compositeScore(b) < this.compositeScore(a) ? b : a)
 		},
 		hasMetadata() {
 			return Object.keys(this.meta).length > 0
@@ -520,6 +523,7 @@ export default {
 		livePaDecimals() {
 			return this.paDecimalsFor(this.liveRows)
 		},
+		warmUpSkip() { return WARM_UP_SKIP },
 		...mapState('settings', ['darkTheme']),
 	},
 
@@ -753,10 +757,15 @@ export default {
 			this.$nextTick(() => this.drawLogCharts())
 		},
 
+		compositeScore(r) {
+			// Penalise slope asymmetry so a symmetric point can win over a slightly lower res
+			return r.res + SLOPE_ASYM_PENALTY * Math.abs(r.lk - r.rk)
+		},
+
 		findBest(rows) {
 			const candidates = rows.filter(r => r.iter >= WARM_UP_SKIP && r.res > 0)
 			if (!candidates.length) return null
-			return candidates.reduce((a, b) => b.res < a.res ? b : a)
+			return candidates.reduce((a, b) => this.compositeScore(b) < this.compositeScore(a) ? b : a)
 		},
 
 		analyseData(rows, best, meta, dp) {
@@ -802,6 +811,15 @@ export default {
 					items.push({ icon: 'mdi-swap-horizontal', color: 'orange', text: `Significant slope asymmetry (lk avg ${lkMean.toFixed(1)}, rk avg ${rkMean.toFixed(1)}) — may indicate a hotend temperature or flow asymmetry.` })
 				else
 					items.push({ icon: 'mdi-check-circle-outline', color: 'green', text: `Slopes are reasonably symmetric (lk avg ${lkMean.toFixed(1)}, rk avg ${rkMean.toFixed(1)}).` })
+			}
+
+			// Note if composite scoring shifted the winner away from the raw res minimum
+			const rawBest = active.reduce((a, b) => b.res < a.res ? b : a)
+			if (best && rawBest && rawBest.iter !== best.iter) {
+				items.push({
+					icon: 'mdi-information-outline', color: 'blue',
+					text: `Slope-weighted scoring selected PA ${best.pa.toFixed(dp)} (res=${best.res}, asym=${Math.abs(best.lk - best.rk)}) over raw minimum PA ${rawBest.pa.toFixed(dp)} (res=${rawBest.res}, asym=${Math.abs(rawBest.lk - rawBest.rk)}) — the selected point has better slope symmetry.`,
+				})
 			}
 
 			let nextSweep = null
@@ -954,16 +972,17 @@ export default {
 
 		goodBoundsFor(rows, best) {
 			if (!best) return null
-			const threshold = best.res * 1.20
+			const bestScore = this.compositeScore(best)
+			const threshold = bestScore * 1.20
 			const active    = rows.filter(r => r.iter >= WARM_UP_SKIP && r.res > 0)
 			const bestIdx   = active.findIndex(r => r.iter === best.iter)
 			if (bestIdx < 0) return null
 			// Walk left from best until we cross the threshold
 			let lo = bestIdx
-			while (lo > 0 && active[lo - 1].res <= threshold) lo--
+			while (lo > 0 && this.compositeScore(active[lo - 1]) <= threshold) lo--
 			// Walk right from best until we cross the threshold
 			let hi = bestIdx
-			while (hi < active.length - 1 && active[hi + 1].res <= threshold) hi++
+			while (hi < active.length - 1 && this.compositeScore(active[hi + 1]) <= threshold) hi++
 			return { gs: active[lo], ge: active[hi] }
 		},
 
