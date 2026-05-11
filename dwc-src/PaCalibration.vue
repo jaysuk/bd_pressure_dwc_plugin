@@ -663,7 +663,9 @@ export default {
 		// in bd_globals.g (global.bd_live_hotend_preset will already be in the model)
 		try {
 			const globals = this.$store.state['machine/model'].global
-			const stored  = globals instanceof Map ? globals.get('bd_live_hotend_preset') : null
+			const stored  = globals instanceof Map
+				? globals.get('bd_live_hotend_preset')
+				: (globals && globals['bd_live_hotend_preset'])
 			if (stored && stored !== 'unknown' && HOTEND_PRESETS.find(p => p.id === stored)) {
 				this.hotendPreset = stored
 			}
