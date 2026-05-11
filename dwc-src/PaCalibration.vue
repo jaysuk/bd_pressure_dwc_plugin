@@ -296,7 +296,7 @@ import Chart from 'chart.js'
 import { mapState } from 'vuex'
 
 const LOG_PATH        = '0:/sys/pa_calibrate_log.txt'
-const STATUS_PATH     = '0:/sys/pa_live_status.json'
+const STATUS_PATH     = '0:/sys/pa_live_status.txt'
 const WARM_UP_SKIP    = 5
 const POLL_INTERVAL_MS = 2000
 
@@ -413,7 +413,7 @@ export default {
 				await this.sendGCode(`set global.bd_live_z_height = ${p.z_height}`)
 
 				// Clear any stale status file so polling can't mistake a previous run as done
-				await this.sendGCode('echo >"0:/sys/pa_live_status.json" "{\\"state\\":\\"starting\\"}"')
+				await this.sendGCode('echo >"0:/sys/pa_live_status.txt" "state=starting"')
 
 				// Fire calibration macro — it runs asynchronously on the Duet
 				await this.sendGCode('M98 P"0:/sys/pa_calibrate_live.g"')
@@ -439,10 +439,25 @@ export default {
 			if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null }
 		},
 
+		parseStatus(text) {
+			// Parses "key=value key=value ..." lines written by the macro
+			const obj = {}
+			for (const pair of text.trim().split(/\s+/)) {
+				const eq = pair.indexOf('=')
+				if (eq > 0) obj[pair.slice(0, eq)] = pair.slice(eq + 1)
+			}
+			if (obj.step)     obj.step     = parseInt(obj.step)
+			if (obj.steps)    obj.steps    = parseInt(obj.steps)
+			if (obj.pa)       obj.pa       = parseFloat(obj.pa)
+			if (obj.best_pa)  obj.best_pa  = parseFloat(obj.best_pa)
+			if (obj.best_res) obj.best_res = parseInt(obj.best_res)
+			return obj
+		},
+
 		async pollStatus() {
 			try {
 				const text = await this.downloadFile(STATUS_PATH)
-				const status = JSON.parse(text)
+				const status = this.parseStatus(text)
 				this.liveStatus = status
 				if (status.state === 'done') {
 					this.stopPolling()
