@@ -399,23 +399,17 @@ export default {
 				// Using M98 with inline assignment is not supported, so we use a helper macro approach:
 				// Send each as a GCode expression. RRF accepts `set global.x = v` if the var exists,
 				// or `global x = v` to create it. We always try set first, fall back to create.
-				const vars = {
-					bd_live_tool:         p.tool,
-					bd_live_extruder:     p.extruder,
-					bd_live_nozzle_temp:  p.nozzle_temp,
-					bd_live_pa_start:     p.pa_start,
-					bd_live_pa_step:      p.pa_step,
-					bd_live_steps:        p.steps,
-					bd_live_low_speed:    p.low_speed,
-					bd_live_high_speed:   p.high_speed,
-					bd_live_travel_speed: p.travel_speed,
-					bd_live_z_height:     p.z_height,
-				}
-				for (const [name, value] of Object.entries(vars)) {
-					// Try to set; if variable doesn't exist RRF will error — we send both forms
-					// and rely on the macro guard to catch any remaining issues
-					await this.sendGCode(`if exists(global.${name})\n  set global.${name} = ${value}\nelse\n  global ${name} = ${value}`)
-				}
+				// bd_globals.g declares all bd_live_* variables at boot, so `set` always works.
+				await this.sendGCode(`set global.bd_live_tool = ${p.tool}`)
+				await this.sendGCode(`set global.bd_live_extruder = ${p.extruder}`)
+				await this.sendGCode(`set global.bd_live_nozzle_temp = ${p.nozzle_temp}`)
+				await this.sendGCode(`set global.bd_live_pa_start = ${p.pa_start}`)
+				await this.sendGCode(`set global.bd_live_pa_step = ${p.pa_step}`)
+				await this.sendGCode(`set global.bd_live_steps = ${p.steps}`)
+				await this.sendGCode(`set global.bd_live_low_speed = ${p.low_speed}`)
+				await this.sendGCode(`set global.bd_live_high_speed = ${p.high_speed}`)
+				await this.sendGCode(`set global.bd_live_travel_speed = ${p.travel_speed}`)
+				await this.sendGCode(`set global.bd_live_z_height = ${p.z_height}`)
 
 				// Fire calibration macro — it runs asynchronously on the Duet
 				await this.sendGCode('M98 P"0:/sys/pa_calibrate_live.g"')
