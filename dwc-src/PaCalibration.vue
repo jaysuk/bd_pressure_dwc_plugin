@@ -476,6 +476,7 @@ canvas {
 <script>
 import Chart from 'chart.js'
 import { mapState } from 'vuex'
+import store from '@/store'
 
 const LOG_PATH        = '0:/sys/pa_calibrate_log.txt'
 const STATUS_PATH     = '0:/sys/pa_live_status.txt'
@@ -644,8 +645,8 @@ export default {
 			return this.paDecimalsFor(this.liveRows)
 		},
 		warmUpSkip() { return WARM_UP_SKIP },
+		modelGlobal() { return store.state.machine.model.global },
 		...mapState('settings', ['darkTheme']),
-		...mapState('machine', { modelGlobal: state => state.model.global }),
 	},
 
 	watch: {
