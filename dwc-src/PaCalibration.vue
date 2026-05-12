@@ -645,7 +645,7 @@ export default {
 		},
 		warmUpSkip() { return WARM_UP_SKIP },
 		...mapState('settings', ['darkTheme']),
-		...mapState('machine/model', { modelGlobal: state => state.global }),
+		...mapState('machine', { modelGlobal: state => state.model.global }),
 	},
 
 	watch: {
