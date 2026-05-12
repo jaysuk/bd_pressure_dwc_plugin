@@ -656,6 +656,10 @@ export default {
 			this.params.pa_step  = p.pa_step
 			this.params.steps    = p.steps
 		},
+		'$store.state.machine.model.global'(globals) {
+			if (this.hotendPreset !== 'unknown') return
+			this.readStoredPreset()
+		},
 	},
 
 	mounted() {
