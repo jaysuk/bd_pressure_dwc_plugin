@@ -645,7 +645,7 @@ export default {
 		},
 		warmUpSkip() { return WARM_UP_SKIP },
 		...mapState('settings', ['darkTheme']),
-		...mapState('machine/model', ['global']),
+		...mapState('machine/model', { modelGlobal: state => state.global }),
 	},
 
 	watch: {
@@ -657,7 +657,7 @@ export default {
 			this.params.pa_step  = p.pa_step
 			this.params.steps    = p.steps
 		},
-		global(globals) {
+		modelGlobal(globals) {
 			if (this.hotendPreset !== 'unknown') return
 			this.readStoredPreset()
 		},
@@ -680,7 +680,7 @@ export default {
 
 		readStoredPreset() {
 			try {
-				const globals = this.global
+				const globals = this.modelGlobal
 				const stored  = globals instanceof Map
 					? globals.get('bd_live_hotend_preset')
 					: null
