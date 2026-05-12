@@ -656,7 +656,7 @@ export default {
 			this.params.pa_step  = p.pa_step
 			this.params.steps    = p.steps
 		},
-		'$store.state.machine.model.global'(globals) {
+		'$store.state.machines'(machines) {
 			if (this.hotendPreset !== 'unknown') return
 			this.readStoredPreset()
 		},
@@ -679,16 +679,11 @@ export default {
 
 		readStoredPreset() {
 			try {
-				const globals = this.$store.state.machine.model.global
-				let stored = null
-				if (globals instanceof Map) {
-					stored = globals.get('bd_live_hotend_preset')
-				} else if (Array.isArray(globals)) {
-					const entry = globals.find(g => g.key === 'bd_live_hotend_preset')
-					stored = entry ? entry.value : null
-				} else if (globals && typeof globals === 'object') {
-					stored = globals['bd_live_hotend_preset']
-				}
+				const host    = this.$store.state.selectedMachine
+				const globals = this.$store.state.machines[host].model.global
+				const stored  = globals instanceof Map
+					? globals.get('bd_live_hotend_preset')
+					: null
 				if (stored && stored !== 'unknown' && HOTEND_PRESETS.find(p => p.id === stored)) {
 					this.hotendPreset = stored
 				}
