@@ -972,11 +972,17 @@ export default {
 					text: `Low variability (CV ${cvPct.toFixed(0)}%) — sweep conditions were consistent.` })
 
 			// --- Range / edge check ---
-			if (edgeFrac < 0.15) {
-				const dir = best.pa - paMin < paMax - best.pa ? 'lower' : 'higher'
+			// Only flag low-end edge if the very first step isn't clearly worse than the minimum.
+			// If rows[0] (PA=paMin) has a much higher score than best, the minimum isn't cut off.
+			const firstScore = active[0] ? active[0].res : best.res
+			const lowEndCutOff = best.pa - paMin < paMax - best.pa   // minimum is near low end
+			const firstClearlyWorse = firstScore > best.res * 1.5    // first step ≥50% worse than best
+			const edgeWarning = edgeFrac < 0.15 && !(lowEndCutOff && firstClearlyWorse)
+			if (edgeWarning) {
+				const dir = lowEndCutOff ? 'lower' : 'higher'
 				items.push({ icon: 'mdi-alert-circle-outline', color: 'orange',
 					text: `Best PA (${best.pa.toFixed(dp)}) is near the sweep edge — the true optimum may be ${dir}. Shift the range before zooming in.` })
-			} else if (edgeFrac < 0.25) {
+			} else if (edgeFrac < 0.25 && !(lowEndCutOff && firstClearlyWorse)) {
 				items.push({ icon: 'mdi-information-outline', color: 'yellow',
 					text: `Best PA (${best.pa.toFixed(dp)}) is close to one edge — consider a follow-up centred on this value.` })
 			} else {
@@ -1048,7 +1054,7 @@ export default {
 						code:   `pa_start = ${paMin.toFixed(dp)}\npa_step  = ${step}\nsteps    = ${active.length}  ; same range`,
 						params: { pa_start: paMin, pa_step: step, steps: active.length },
 					}
-				} else if (edgeFrac < 0.15) {
+				} else if (edgeWarning) {
 					// Confident result but near edge — shift range
 					const dir = best.pa - paMin < paMax - best.pa ? -1 : 1
 					const ss  = parseFloat(Math.max(0, best.pa + dir * paRange * 0.4).toPrecision(dp))
