@@ -561,7 +561,7 @@ export default {
 				pa_start:      0.0,
 				pa_step:       0.005,
 				steps:         50,
-				warmup_steps:  5,
+				warmup_steps:  8,
 				low_speed:     1020,
 				high_speed:    10740,
 				travel_speed:  18000,
