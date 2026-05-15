@@ -68,7 +68,7 @@ canvas {
 		<!-- ================================================================
 		     LEFT PANEL — parameters
 		     ================================================================ -->
-		<v-col v-show="activeTab === 0" cols="12" md="2" class="params-panel pa-3" style="overflow-y:auto;max-height:calc(100vh - 120px)">
+		<v-col v-show="activeTab === 0" cols="12" md="2" class="params-panel pa-3" style="overflow-y:auto;align-self:stretch">
 			<div class="subtitle-2 mb-2">
 				<v-icon small left>mdi-tune</v-icon>Parameters
 			</div>
@@ -88,8 +88,7 @@ canvas {
 			<div v-else class="mb-3" />
 
 			<div class="param-section-title">Tool</div>
-			<v-text-field :value="params.tool"        @change="v => params.tool        = parseInt(v)   || 0"     dense outlined hide-details label="Tool #"     inputmode="numeric"  class="mb-2" :disabled="isRunning" />
-			<v-text-field :value="params.extruder"    @change="v => params.extruder    = parseInt(v)   || 0"     dense outlined hide-details label="Extruder #" inputmode="numeric"  class="mb-2" :disabled="isRunning" />
+			<v-text-field :value="params.tool" @change="v => params.tool = parseInt(v) || 0" dense outlined hide-details label="Tool #" inputmode="numeric" class="mb-2" :disabled="isRunning" />
 
 			<div class="param-section-title">Temperature</div>
 			<v-text-field :value="params.nozzle_temp" @change="v => params.nozzle_temp = parseInt(v)   || 210"   dense outlined hide-details label="Nozzle"     inputmode="numeric"  class="mb-2" :disabled="isRunning" suffix="°C" />
@@ -99,6 +98,7 @@ canvas {
 			<v-text-field :value="params.pa_step"     @change="v => { params.pa_step     = parseFloat(v) || 0.005; hotendPreset = 'custom' }" dense outlined hide-details label="PA step"       inputmode="decimal"  class="mb-2" :disabled="isRunning" />
 			<v-text-field :value="params.steps"       @change="v => { params.steps       = parseInt(v)   || 50;    hotendPreset = 'custom' }" dense outlined hide-details label="Steps"          inputmode="numeric"  class="mb-2" :disabled="isRunning" />
 			<v-text-field :value="params.warmup_steps" @change="v => params.warmup_steps = parseInt(v)   || 0"                               dense outlined hide-details label="Warm-up passes" inputmode="numeric"  class="mb-2" :disabled="isRunning" />
+			<v-switch v-model="params.bidirectional" dense hide-details label="Bidirectional passes" class="mb-2 mt-0" :disabled="isRunning" />
 			<div class="caption mb-3" style="opacity:0.6">
 				Range: {{ params.pa_start.toFixed(livePaDecimals) }} – {{ paEnd.toFixed(livePaDecimals) }}
 			</div>
@@ -197,7 +197,7 @@ canvas {
 								&nbsp;—&nbsp; res={{ liveBest.res }}, lk={{ liveBest.lk }}, rk={{ liveBest.rk }}
 								<v-btn v-if="liveStatus.state === 'done'" small outlined class="ml-3" color="white" @click="copyLiveM572">
 									<v-icon left small>mdi-content-copy</v-icon>
-									Copy M572 D{{ params.extruder }} S{{ liveBest.pa.toFixed(livePaDecimals) }}
+									Copy M572 D0 S{{ liveBest.pa.toFixed(livePaDecimals) }}
 								</v-btn>
 							</v-alert>
 							<v-snackbar v-model="copiedLive" timeout="2000" color="success" top>M572 command copied</v-snackbar>
@@ -361,13 +361,13 @@ canvas {
 							<v-simple-table dense class="mb-4">
 								<thead><tr><th>Parameter</th><th>What it does</th><th>Suggested starting point</th></tr></thead>
 								<tbody>
-									<tr><td><strong>Tool #</strong></td><td>Which tool to heat and calibrate (T0, T1 …)</td><td>0 for single-tool printers</td></tr>
-									<tr><td><strong>Extruder #</strong></td><td>Which extruder index to pass to M572 (usually matches Tool #)</td><td>0</td></tr>
+									<tr><td><strong>Tool #</strong></td><td>Which tool to heat and calibrate (T0, T1 …). The extruder is derived automatically from the selected tool.</td><td>0 for single-tool printers</td></tr>
 									<tr><td><strong>Nozzle temp</strong></td><td>Temperature to heat to before calibrating. Use your normal printing temperature for the filament you want to tune.</td><td>Your usual print temp</td></tr>
 									<tr><td><strong>PA start</strong></td><td>The lowest PA value to test. Start at 0 for a first run.</td><td>0.0 (set automatically by hotend preset)</td></tr>
 									<tr><td><strong>PA step</strong></td><td>How much to increase PA between each iteration. Smaller = finer resolution but longer run time.</td><td>Set automatically by hotend preset</td></tr>
 									<tr><td><strong>Steps</strong></td><td>Number of iterations. Range covered = PA start + (steps−1) × step.</td><td>50</td></tr>
-									<tr><td><strong>Warm-up passes</strong></td><td>Number of extrusion passes at PA=0 run before the sweep begins. These stabilise the hotend and sensor but are not recorded in the log. Set to 0 to skip.</td><td>5</td></tr>
+									<tr><td><strong>Warm-up passes</strong></td><td>Number of extrusion passes at PA=0 run before the sweep begins. These stabilise the hotend and sensor but are not recorded in the log. Set to 0 to skip.</td><td>8</td></tr>
+									<tr><td><strong>Bidirectional passes</strong></td><td>When enabled, each pass extrudes on the return move instead of travelling back empty, roughly halving run time. Disable if results seem noisier than expected.</td><td>Off</td></tr>
 									<tr><td><strong>Slow speed</strong></td><td>Speed for the ramp sections (mm/min). Lower = more sensitive to PA.</td><td>1020 (17 mm/s)</td></tr>
 									<tr><td><strong>Fast speed</strong></td><td>Speed for the high-speed section (mm/min). Should be close to your normal print speed.</td><td>10740 (179 mm/s)</td></tr>
 									<tr><td><strong>Travel speed</strong></td><td>Speed to move between lines (mm/min).</td><td>18000</td></tr>
@@ -555,17 +555,17 @@ export default {
 			hotendPreset: 'unknown',
 
 			params: {
-				tool:          0,
-				extruder:      0,
-				nozzle_temp:   210,
-				pa_start:      0.0,
-				pa_step:       0.005,
-				steps:         50,
-				warmup_steps:  8,
-				low_speed:     1020,
-				high_speed:    10740,
-				travel_speed:  18000,
-				z_height:      50,
+				tool:           0,
+				nozzle_temp:    210,
+				pa_start:       0.0,
+				pa_step:        0.005,
+				steps:          50,
+				warmup_steps:   8,
+				bidirectional:  false,
+				low_speed:      1020,
+				high_speed:     10740,
+				travel_speed:   18000,
+				z_height:       50,
 			},
 
 			// live run
@@ -710,12 +710,12 @@ export default {
 				// or `global x = v` to create it. We always try set first, fall back to create.
 				// bd_globals.g declares all bd_live_* variables at boot, so `set` always works.
 				await this.sendGCode(`set global.bd_live_tool = ${p.tool}`)
-				await this.sendGCode(`set global.bd_live_extruder = ${p.extruder}`)
 				await this.sendGCode(`set global.bd_live_nozzle_temp = ${p.nozzle_temp}`)
 				await this.sendGCode(`set global.bd_live_pa_start = ${p.pa_start}`)
 				await this.sendGCode(`set global.bd_live_pa_step = ${p.pa_step}`)
 				await this.sendGCode(`set global.bd_live_steps = ${p.steps}`)
 				await this.sendGCode(`set global.bd_live_warmup_steps = ${p.warmup_steps}`)
+				await this.sendGCode(`set global.bd_live_bidirectional = ${p.bidirectional ? 'true' : 'false'}`)
 				await this.sendGCode(`set global.bd_live_hotend_preset = "${this.hotendPreset}"`)
 				await this.sendGCode(`set global.bd_live_low_speed = ${p.low_speed}`)
 				await this.sendGCode(`set global.bd_live_high_speed = ${p.high_speed}`)
@@ -776,7 +776,6 @@ export default {
 					await this.pollLog()
 					setTimeout(async () => {
 						await this.loadFromDuet(this.lastRunPreset)
-						this.activeTab = 1
 					}, 1500)
 					return
 				}
@@ -823,7 +822,7 @@ export default {
 
 		copyLiveM572() {
 			if (!this.liveBest) return
-			navigator.clipboard.writeText(`M572 D${this.params.extruder} S${this.liveBest.pa.toFixed(livePaDecimals)}`)
+			navigator.clipboard.writeText(`M572 D0 S${this.liveBest.pa.toFixed(livePaDecimals)}`)
 				.then(() => { this.copiedLive = true })
 		},
 
@@ -864,7 +863,6 @@ export default {
 			try {
 				const text = await this.downloadFile(LOG_PATH)
 				this.parseCSV(text, preset || null)
-				this.activeTab = 1
 			} catch (e) {
 				this.logError = `Could not fetch log — run a calibration first. (${e.message || e})`
 			} finally {
@@ -916,7 +914,9 @@ export default {
 			this.rows = parsed
 			this.best = this.findBest(parsed)
 			this.analysis = this.analyseData(parsed, this.best, meta, this.paDecimalsFor(parsed), resolvedPreset)
-			this.$nextTick(() => this.drawLogCharts())
+			// Switch to log tab first, then draw charts once the canvas elements are in the DOM
+			this.activeTab = 1
+			this.$nextTick(() => this.$nextTick(() => this.drawLogCharts()))
 		},
 
 		compositeScore(r) {
@@ -1350,7 +1350,7 @@ export default {
 		},
 		copyLiveM572() {
 			if (!this.liveBest) return
-			navigator.clipboard.writeText(`M572 D${this.params.extruder} S${this.liveBest.pa.toFixed(livePaDecimals)}`).then(() => { this.copiedLive = true })
+			navigator.clipboard.writeText(`M572 D0 S${this.liveBest.pa.toFixed(livePaDecimals)}`).then(() => { this.copiedLive = true })
 		},
 		clearData() {
 			this.destroyLogCharts()
