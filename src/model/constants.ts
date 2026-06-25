@@ -1,0 +1,13 @@
+export const PLUGIN_MANIFEST_ID = "BdPressurePA";
+export const PLUGIN_ID = "bdPressurePA";
+export const EMBEDDABLE_ID = "BdPressurePA.PaCalibration";
+export const ROUTE_PATH = "/Plugins/BdPressurePA";
+export const DOCS_URL = "https://github.com/jaysuk/bd_pressure";
+export const LOG_DIR = "0:/sys/PA Calibration";
+export const STATUS_PATH = "0:/sys/pa_live_status.txt";
+export const WARM_UP_SKIP = 2;
+export const SLOPE_ASYM_PENALTY = 0.5;
+export const POLL_INTERVAL_MS = 2000;
+export const LS_UPDATE_ENABLED = "bdPressurePA.updateCheck.enabled";
+export const LS_UPDATE_LAST = "bdPressurePA.updateCheck.lastCheck";
+export const LS_UPDATE_DISMISSED = "bdPressurePA.updateCheck.dismissed";

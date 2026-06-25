@@ -1,7 +1,10 @@
 {
-  "id": "BdPressurePA",
-  "name": "bd_pressure PA Calibration",
-  "author": "jaysuk",
-  "version": "1.1.0",
-  "dwcVersion": "3.6"
+	"id": "BdPressurePA",
+	"name": "bd_pressure PA Calibration",
+	"author": "jaysuk",
+	"version": "2.0.0",
+	"dwcVersion": "auto-major",
+	"license": "GPL-3.0-or-later",
+	"homepage": "https://github.com/jaysuk/bd_pressure_dwc_plugin",
+	"tags": ["pressure-advance", "calibration", "bd_pressure", "extruder"]
 }

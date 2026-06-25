@@ -1,0 +1,24 @@
+{
+	"title": "bd_pressure PA Calibration",
+	"menuCaption": "PA Calibration",
+	"widget": "PA Calibration",
+	"embeddableDesc": "bd_pressure Pressure Advance calibration panel",
+	"updates": {
+		"title": "bd_pressure PA Calibration update",
+		"notifyPlugin": "bd_pressure PA Calibration v{version} is available. Open Plugins → PA Calibration to update.",
+		"notifyDwc": "bd_pressure PA Calibration v{version} needs DuetWebControl {dwc} — update DWC first.",
+		"applyFailed": "No downloadable asset found for this release.",
+		"corsBlocked": "Couldn't fetch the update automatically — opening the download instead.",
+		"installedReload": "v{version} installed. Reload DWC to finish.",
+		"available": "bd_pressure PA Calibration v{version} is available.",
+		"apply": "Update now",
+		"dismiss": "Dismiss",
+		"reload": "Reload DWC",
+		"upToDate": "bd_pressure PA Calibration is up to date.",
+		"check": "Check for updates"
+	},
+	"diagnostics": {
+		"copied": "Diagnostics copied to clipboard.",
+		"copyFailed": "Couldn't copy — try the download instead."
+	}
+}
