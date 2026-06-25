@@ -2,7 +2,7 @@
 	"title": "bd_pressure PA Calibration",
 	"menuCaption": "PA Calibration",
 	"widget": "PA Calibration",
-	"embeddableDesc": "bd_pressure Pressure Advance calibration panel",
+	"embeddableDesc": "Compact PA-calibration tile: latest best-PA result, pressure-score chart and live-sweep progress.",
 	"updates": {
 		"title": "bd_pressure PA Calibration update",
 		"notifyPlugin": "bd_pressure PA Calibration v{version} is available. Open Plugins → PA Calibration to update.",
