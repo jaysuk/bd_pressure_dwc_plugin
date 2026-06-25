@@ -83,7 +83,11 @@ canvas {
 				label="Hotend type"
 				class="mb-1"
 				:disabled="isRunning"
-			/>
+			>
+				<template #append-inner>
+					<HelpTip text="Selects a preset PA sweep range and step size tuned for your hotend type. Choosing a preset also enables range-checking in the Analysis panel. Changing PA start/step/steps manually switches back to Custom." :href="DOCS_URL" />
+				</template>
+			</v-select>
 			<div v-if="currentPreset.note" class="text-caption mb-3" style="opacity:0.55;line-height:1.3">
 				{{ currentPreset.note }}
 			</div>
@@ -95,7 +99,9 @@ canvas {
 				@update:model-value="v => params.tool = parseInt(String(v)) || 0"
 				variant="outlined" density="compact" hide-details
 				label="Tool #" inputmode="numeric" class="mb-2" :disabled="isRunning"
-			/>
+			>
+				<template #append-inner><HelpTip text="Which tool to heat and calibrate (T0, T1 …). The extruder index is derived automatically from the selected tool." /></template>
+			</v-text-field>
 
 			<div class="param-section-title">Temperature</div>
 			<v-text-field
@@ -111,30 +117,39 @@ canvas {
 				@update:model-value="v => { params.pa_start = parseFloat(String(v)) || 0; hotendPreset = 'custom' }"
 				variant="outlined" density="compact" hide-details
 				label="PA start" inputmode="decimal" class="mb-2" :disabled="isRunning"
-			/>
+			>
+				<template #append-inner><HelpTip text="Lowest PA value to test. Use 0 for a first run, or narrow the range after an initial sweep to refine the result." /></template>
+			</v-text-field>
 			<v-text-field
 				:model-value="params.pa_step"
 				@update:model-value="v => { params.pa_step = parseFloat(String(v)) || 0.005; hotendPreset = 'custom' }"
 				variant="outlined" density="compact" hide-details
 				label="PA step" inputmode="decimal" class="mb-2" :disabled="isRunning"
-			/>
+			>
+				<template #append-inner><HelpTip text="PA increase between iterations. Smaller gives finer resolution but more time; larger gives a faster wide scan. The hotend preset sets a sensible default." /></template>
+			</v-text-field>
 			<v-text-field
 				:model-value="params.steps"
 				@update:model-value="v => { params.steps = parseInt(String(v)) || 50; hotendPreset = 'custom' }"
 				variant="outlined" density="compact" hide-details
 				label="Steps" inputmode="numeric" class="mb-2" :disabled="isRunning"
-			/>
+			>
+				<template #append-inner><HelpTip text="Number of PA values to test. Total range covered = PA start + (steps − 1) × step. 50 steps is a good default for an initial scan." /></template>
+			</v-text-field>
 			<v-text-field
 				:model-value="params.warmup_steps"
 				@update:model-value="v => params.warmup_steps = parseInt(String(v)) || 0"
 				variant="outlined" density="compact" hide-details
 				label="Warm-up passes" inputmode="numeric" class="mb-2" :disabled="isRunning"
-			/>
+			>
+				<template #append-inner><HelpTip text="Extrusion passes at PA=0 run before the sweep to stabilise the hotend and sensor. These are not recorded. Set to 0 to skip; 8 is a good default." /></template>
+			</v-text-field>
 			<v-switch
 				v-model="params.bidirectional"
 				density="compact" hide-details
 				label="Bidirectional passes" class="mb-2 mt-0" :disabled="isRunning"
 			/>
+			<HelpTip class="mb-1" text="When enabled, each step extrudes on the return move instead of travelling empty, roughly halving run time. Disable if results seem noisier than expected." />
 			<div class="text-caption mb-3" style="opacity:0.6">
 				Range: {{ params.pa_start.toFixed(livePaDecimals) }} – {{ paEnd.toFixed(livePaDecimals) }}
 			</div>
@@ -175,9 +190,11 @@ canvas {
 			<v-btn block color="success" :disabled="isRunning || hotendPreset === 'unknown'" @click="startCalibration" class="mb-2">
 				<v-icon class="mr-1">mdi-play</v-icon>Start
 			</v-btn>
+			<HelpTip class="mb-1" text="Heats the nozzle, primes the sensor, runs warm-up passes, then sweeps PA across the configured range. Charts update live as data arrives. Results are saved to the Duet SD card automatically." :href="DOCS_URL" />
 			<v-btn block color="error" :disabled="!isRunning" @click="stopCalibration" variant="outlined">
 				<v-icon class="mr-1">mdi-stop</v-icon>Abort
 			</v-btn>
+			<HelpTip class="mb-1" text="Sends a stop command to the macro. Data collected so far is preserved in the log file and will still appear in the Log Viewer tab." />
 
 			<!-- Live status -->
 			<div v-if="liveStatus.state" class="mt-3">
@@ -254,6 +271,7 @@ canvas {
 							>
 								<v-icon size="small">mdi-refresh</v-icon>
 							</v-btn>
+							<HelpTip text="Loads a saved calibration log from the Duet SD card (/sys/PA Calibration/). Each run creates a timestamped CSV file. Alternatively, drop a file onto the Log Viewer tab or use the local file browser." />
 						</template>
 					</v-select>
 				</v-card-title>
@@ -288,6 +306,7 @@ canvas {
 							<v-alert v-if="liveBest" type="success" density="compact" class="mb-2">
 								<span class="best-badge">Best PA so far = {{ liveBest.pa.toFixed(livePaDecimals) }}</span>
 								&nbsp;—&nbsp; res={{ liveBest.res }}, lk={{ liveBest.lk }}, rk={{ liveBest.rk }}
+								<HelpTip text="The PA value with the lowest composite score (res + 0.5 × |lk − rk|) so far. The Copy M572 button appears when the sweep is done — paste the result into config.g." />
 								<v-btn v-if="liveStatus.state === 'done'" size="small" variant="outlined" class="ml-3" color="white" @click="copyLiveM572">
 									<v-icon size="small" class="mr-1">mdi-content-copy</v-icon>
 									Copy M572 D0 S{{ liveBest.pa.toFixed(livePaDecimals) }}
@@ -297,9 +316,27 @@ canvas {
 
 							<template v-if="liveRows.length">
 								<v-row dense>
-									<v-col cols="12"><canvas ref="liveChartResEl" height="200"></canvas></v-col>
-									<v-col cols="12"><canvas ref="liveChartSlopesEl" height="160"></canvas></v-col>
-									<v-col cols="12"><canvas ref="liveChartHEl" height="160"></canvas></v-col>
+									<v-col cols="12">
+										<div class="d-flex align-center mb-1">
+											<span class="text-caption font-weight-medium">Pressure score (res)</span>
+											<HelpTip class="ml-1" text="Lower res is better — it measures how far the pressure profile deviated from ideal during that extrusion move. The red dashed line marks the recommended PA; the green band spans values within 20% of the best composite score." />
+										</div>
+										<canvas ref="liveChartResEl" height="200"></canvas>
+									</v-col>
+									<v-col cols="12">
+										<div class="d-flex align-center mb-1">
+											<span class="text-caption font-weight-medium">Slopes (lk / rk)</span>
+											<HelpTip class="ml-1" text="lk is the pressure build-up slope entering the fast segment; rk is the bleed-off slope leaving it. At the ideal PA value both should be low and roughly equal." />
+										</div>
+										<canvas ref="liveChartSlopesEl" height="160"></canvas>
+									</v-col>
+									<v-col cols="12">
+										<div class="d-flex align-center mb-1">
+											<span class="text-caption font-weight-medium">Signal quality (Hk / Ha)</span>
+											<HelpTip class="ml-1" text="Hk and Ha are the peak signal amplitudes on the entry and exit sides of the move. Values near 255 indicate a clean strong signal; values below ~30 suggest the sensor did not register the pressure event clearly." />
+										</div>
+										<canvas ref="liveChartHEl" height="160"></canvas>
+									</v-col>
 								</v-row>
 							</template>
 						</v-card-text>
@@ -322,6 +359,7 @@ canvas {
 									Drop a <strong>pa_*.csv</strong> log file here, click to browse,<br>
 									or select a log from the <strong>Load log from Duet</strong> picker above.
 								</div>
+								<HelpTip class="mt-2" text="Accepts the pa_YYYYMMDD_HHMMSS.csv files saved in /sys/PA Calibration/ on the Duet SD card. You can also load a log directly from the printer using the picker in the title bar." />
 							</div>
 							<input ref="fileInputEl" type="file" accept=".txt,.csv" style="display:none" @change="onFileSelect" />
 
@@ -345,6 +383,7 @@ canvas {
 								<v-alert type="success" density="compact" class="mb-3" v-if="best">
 									<span class="best-badge">Best PA = {{ best.pa.toFixed(logPaDecimals) }}</span>
 									&nbsp;—&nbsp; res={{ best.res }}&nbsp; lk={{ best.lk }}&nbsp; rk={{ best.rk }}&nbsp; Hk={{ best.Hk }}&nbsp; Ha={{ best.Ha }}
+									<HelpTip text="Best PA is chosen by composite score: res + 0.5 × |lk − rk|, excluding the first two recorded iterations. Copy M572 puts the result on the clipboard — paste it into config.g after your M207/M572 setup." />
 									<v-btn size="small" variant="outlined" class="ml-3" color="white" @click="copyM572">
 										<v-icon size="small" class="mr-1">mdi-content-copy</v-icon>
 										Copy M572 D{{ logExtruderIndex }} S{{ best.pa.toFixed(logPaDecimals) }}
@@ -353,14 +392,33 @@ canvas {
 								<v-snackbar v-model="copied" :timeout="2000" color="success" location="top">M572 command copied to clipboard</v-snackbar>
 
 								<v-row dense>
-									<v-col cols="12"><canvas ref="chartResEl"    height="200"></canvas></v-col>
-									<v-col cols="12"><canvas ref="chartSlopesEl" height="160"></canvas></v-col>
-									<v-col cols="12"><canvas ref="chartHEl"      height="160"></canvas></v-col>
+									<v-col cols="12">
+										<div class="d-flex align-center mb-1">
+											<span class="text-caption font-weight-medium">Pressure score (res)</span>
+											<HelpTip class="ml-1" text="Lower res is better — it measures how far the pressure profile deviated from ideal. The red dashed line shows the recommended PA (composite score minimum); the green band covers values within 20% of that minimum." />
+										</div>
+										<canvas ref="chartResEl" height="200"></canvas>
+									</v-col>
+									<v-col cols="12">
+										<div class="d-flex align-center mb-1">
+											<span class="text-caption font-weight-medium">Slopes (lk / rk)</span>
+											<HelpTip class="ml-1" text="lk (left slope) measures the pressure spike entering the fast segment; rk (right slope) measures the bleed-off leaving it. Ideal PA gives low, symmetric slopes." />
+										</div>
+										<canvas ref="chartSlopesEl" height="160"></canvas>
+									</v-col>
+									<v-col cols="12">
+										<div class="d-flex align-center mb-1">
+											<span class="text-caption font-weight-medium">Signal quality (Hk / Ha)</span>
+											<HelpTip class="ml-1" text="Hk and Ha are peak signal amplitudes on the entry and exit sides. Values near 255 indicate a clean, strong signal; very low values suggest the sensor did not register the pressure event clearly." />
+										</div>
+										<canvas ref="chartHEl" height="160"></canvas>
+									</v-col>
 								</v-row>
 
 								<v-card variant="outlined" class="mt-4" v-if="analysis.items.length">
 									<v-card-title class="text-subtitle-1 pb-1">
 										<v-icon size="small" class="mr-1">mdi-lightbulb-outline</v-icon>Analysis
+										<HelpTip class="ml-1" text="Automated assessment of the sweep: checks noise level, whether the best PA is near the sweep edge, and whether the result is a clear minimum or a noisy plateau. Follow the suggested action before deciding to zoom in." />
 									</v-card-title>
 									<v-card-text class="pt-0">
 										<div v-for="(item, i) in analysis.items" :key="i" class="analysis-item">
@@ -369,11 +427,15 @@ canvas {
 										</div>
 										<template v-if="analysis.nextSweep">
 											<v-divider class="my-3" />
-											<div class="text-subtitle-2 mb-1"><v-icon size="small" class="mr-1">mdi-magnify-plus-outline</v-icon>Suggested next sweep</div>
+											<div class="text-subtitle-2 mb-1 d-flex align-center">
+												<v-icon size="small" class="mr-1">mdi-magnify-plus-outline</v-icon>Suggested next sweep
+												<HelpTip class="ml-1" text="A narrower or shifted sweep calculated from the current result. Use Load into Live Run to apply these parameters directly, or Copy to paste the parameters manually." />
+											</div>
 											<div class="text-body-2 mb-2">{{ analysis.nextSweep.reason }}</div>
 											<code class="next-sweep-code">{{ analysis.nextSweep.code }}</code>
 											<v-btn size="small" variant="text" class="mt-2" @click="copyNextSweep"><v-icon size="small" class="mr-1">mdi-content-copy</v-icon>Copy</v-btn>
 											<v-btn size="small" variant="outlined" class="mt-2 ml-1" color="primary" @click="applyNextSweep"><v-icon size="small" class="mr-1">mdi-play-circle-outline</v-icon>Load into Live Run</v-btn>
+											<HelpTip class="ml-1" text="Copies the suggested start/step/steps into the Live Run parameters panel and switches to the Live Run tab, ready to start a refined sweep immediately." />
 											<v-snackbar v-model="copiedSweep" :timeout="2000" color="success" location="top">Next sweep parameters copied</v-snackbar>
 										</template>
 									</v-card-text>
@@ -582,11 +644,11 @@ canvas {
 import { ref, computed, watch, onMounted, onActivated, onBeforeUnmount, nextTick } from "vue";
 import { Chart, registerables } from "chart.js";
 import { useTheme } from "vuetify";
-import { AboutDialog } from "dwc-plugin-runtime";
+import { AboutDialog, HelpTip } from "dwc-plugin-runtime";
 
 import { useMachineStore } from "@/stores/machine";
 
-import { PLUGIN_MANIFEST_ID, WARM_UP_SKIP, LOG_DIR, STATUS_PATH, POLL_INTERVAL_MS } from "../model/constants";
+import { PLUGIN_MANIFEST_ID, WARM_UP_SKIP, LOG_DIR, STATUS_PATH, POLL_INTERVAL_MS, DOCS_URL } from "../model/constants";
 import { HOTEND_PRESETS, activePreset, hotendPresetItems, type HotendPreset } from "../model/presets";
 import { parseStatus, parseLogRows, parseCSV, type LogRow, type LogMeta } from "../model/parse";
 import {
