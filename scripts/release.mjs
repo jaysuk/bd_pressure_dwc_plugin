@@ -4,7 +4,7 @@
  * tag push triggers the CI release build (see .github/workflows/release.yml).
  *
  *   node scripts/release.mjs 1.0.1          # bump + commit + tag (you push when ready)
- *   node scripts/release.mjs 1.0.1 --push   # ...and push the commit + tag (triggers the release)
+ *   node scripts/release.mjs 1.0.1 --push   # …and push the commit + tag (triggers the release)
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -46,7 +46,7 @@ console.log(`Committed and tagged ${tag}`);
 const t = pickTitle(version);
 console.log(`Release title: ${t.label}`);
 if (t.remaining <= LOW_TITLES_THRESHOLD) {
-	console.warn(`\n  Only ${t.remaining} unused release title(s) left -- add more to scripts/release-titles.txt.`);
+	console.warn(`\n⚠️  Only ${t.remaining} unused release title(s) left — add more to scripts/release-titles.txt.`);
 }
 
 if (push) {

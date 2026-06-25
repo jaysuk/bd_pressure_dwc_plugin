@@ -61,7 +61,7 @@ export function pickTitle(version) {
 	return {
 		version: current,
 		title,
-		label: title ? `v${current} -- "${title}"` : `v${current}`,
+		label: title ? `v${current} — "${title}"` : `v${current}`,
 		index: idx,
 		total: titles.length,
 		remaining: Math.max(0, titles.length - 1 - idx),
@@ -77,7 +77,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 		process.stdout.write(String(r.remaining));
 	} else {
 		if (r.remaining <= LOW_TITLES_THRESHOLD) {
-			process.stderr.write(`  Only ${r.remaining} unused release title(s) left after this one -- add more to scripts/release-titles.txt.\n`);
+			process.stderr.write(`⚠️  Only ${r.remaining} unused release title(s) left after this one — add more to scripts/release-titles.txt.\n`);
 		}
 		process.stdout.write(r.label);
 	}

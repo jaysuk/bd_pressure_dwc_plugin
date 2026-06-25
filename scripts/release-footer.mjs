@@ -28,14 +28,14 @@ const dwcBuiltAgainst = dwcVersion
 const out = `
 ---
 
-### Install
+### 📦 Install
 1. Download \`BdPressurePA-${pkgVersion}.zip\` from the **Assets** below.
-2. In DuetWebControl, go to **Settings -> General -> Plugins** and click **Install Plugin**.
+2. In DuetWebControl, go to **Settings → General → Plugins** and click **Install Plugin**.
 3. Select the downloaded ZIP and accept the third-party-plugin prompt.
-4. Reload DWC, then open **Plugins -> PA Calibration**.
+4. Reload DWC, then open **Plugins → PA Calibration**.
 
-> Built against ${dwcBuiltAgainst}. Use a DuetWebControl build at or near this version.
-> Requires a Duet board with a bd_pressure strain-gauge sensor wired to the UART and Z-probe input.
+> 🔧 Built against ${dwcBuiltAgainst}. Use a DuetWebControl build at or near this version.
+> ⚙️ Requires the RRF bd_pressure firmware on the sensor (v2.24+) and the SD macros this plugin installs. See the [bd_pressure project](https://github.com/jaysuk/bd_pressure) for wiring and firmware.
 
 <!-- dwc-plugin-update ${JSON.stringify({ version: pkgVersion, dwcVersion: requiredDwc, asset: `BdPressurePA-${pkgVersion}.zip` })} -->
 `;
