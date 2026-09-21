@@ -22,9 +22,19 @@
 .meta-chip {
 	margin: 2px 4px 2px 0;
 }
-canvas {
-	max-width: 100%;
+/* Fixed-height, position:relative wrappers so Chart.js's responsive resize observer has something
+   stable to measure — without this the canvas and its container feed back into each other's size
+   and grow without bound. Same pattern already used in BdPressureWidget.vue's .bdw-chart. */
+.chart-wrap {
+	position: relative;
+	width: 100%;
 }
+.chart-wrap canvas {
+	position: absolute;
+	inset: 0;
+}
+.chart-wrap--tall { height: 200px; }
+.chart-wrap--short { height: 160px; }
 .analysis-item {
 	display: flex;
 	align-items: flex-start;
@@ -287,6 +297,9 @@ canvas {
 					<v-tab value="help">
 						<v-icon size="small" class="mr-1">mdi-help-circle-outline</v-icon>Help
 					</v-tab>
+					<v-tab value="setup">
+						<v-icon size="small" class="mr-1">mdi-cog-outline</v-icon>Setup
+					</v-tab>
 				</v-tabs>
 
 				<v-tabs-window v-model="activeTab">
@@ -321,21 +334,21 @@ canvas {
 											<span class="text-caption font-weight-medium">Pressure score (res)</span>
 											<HelpTip class="ml-1" text="Lower res is better — it measures how far the pressure profile deviated from ideal during that extrusion move. The red dashed line marks the recommended PA; the green band spans values within 20% of the best composite score." />
 										</div>
-										<canvas ref="liveChartResEl" height="200"></canvas>
+										<div class="chart-wrap chart-wrap--tall"><canvas ref="liveChartResEl"></canvas></div>
 									</v-col>
 									<v-col cols="12">
 										<div class="d-flex align-center mb-1">
 											<span class="text-caption font-weight-medium">Slopes (lk / rk)</span>
 											<HelpTip class="ml-1" text="lk is the pressure build-up slope entering the fast segment; rk is the bleed-off slope leaving it. At the ideal PA value both should be low and roughly equal." />
 										</div>
-										<canvas ref="liveChartSlopesEl" height="160"></canvas>
+										<div class="chart-wrap chart-wrap--short"><canvas ref="liveChartSlopesEl"></canvas></div>
 									</v-col>
 									<v-col cols="12">
 										<div class="d-flex align-center mb-1">
 											<span class="text-caption font-weight-medium">Signal quality (Hk / Ha)</span>
 											<HelpTip class="ml-1" text="Hk and Ha are the peak signal amplitudes on the entry and exit sides of the move. Values near 255 indicate a clean strong signal; values below ~30 suggest the sensor did not register the pressure event clearly." />
 										</div>
-										<canvas ref="liveChartHEl" height="160"></canvas>
+										<div class="chart-wrap chart-wrap--short"><canvas ref="liveChartHEl"></canvas></div>
 									</v-col>
 								</v-row>
 							</template>
@@ -397,21 +410,21 @@ canvas {
 											<span class="text-caption font-weight-medium">Pressure score (res)</span>
 											<HelpTip class="ml-1" text="Lower res is better — it measures how far the pressure profile deviated from ideal. The red dashed line shows the recommended PA (composite score minimum); the green band covers values within 20% of that minimum." />
 										</div>
-										<canvas ref="chartResEl" height="200"></canvas>
+										<div class="chart-wrap chart-wrap--tall"><canvas ref="chartResEl"></canvas></div>
 									</v-col>
 									<v-col cols="12">
 										<div class="d-flex align-center mb-1">
 											<span class="text-caption font-weight-medium">Slopes (lk / rk)</span>
 											<HelpTip class="ml-1" text="lk (left slope) measures the pressure spike entering the fast segment; rk (right slope) measures the bleed-off leaving it. Ideal PA gives low, symmetric slopes." />
 										</div>
-										<canvas ref="chartSlopesEl" height="160"></canvas>
+										<div class="chart-wrap chart-wrap--short"><canvas ref="chartSlopesEl"></canvas></div>
 									</v-col>
 									<v-col cols="12">
 										<div class="d-flex align-center mb-1">
 											<span class="text-caption font-weight-medium">Signal quality (Hk / Ha)</span>
 											<HelpTip class="ml-1" text="Hk and Ha are peak signal amplitudes on the entry and exit sides. Values near 255 indicate a clean, strong signal; very low values suggest the sensor did not register the pressure event clearly." />
 										</div>
-										<canvas ref="chartHEl" height="160"></canvas>
+										<div class="chart-wrap chart-wrap--short"><canvas ref="chartHEl"></canvas></div>
 									</v-col>
 								</v-row>
 
@@ -589,6 +602,11 @@ canvas {
 
 							<v-divider class="mb-4" />
 
+							<div class="text-subtitle-1 mb-1"><v-icon size="small" class="mr-1" color="primary">mdi-cog-outline</v-icon>Setup tab</div>
+							<p class="text-body-2 mb-4">The <strong>Setup</strong> tab gives you the same sensor configuration and diagnostics as the separate <code>/macros/bd_*.g</code> files (status, version, reboot, baud rate, trigger threshold, PA/endstop mode, trigger/ADC logging, and a UART self-test) without leaving the plugin. Firmware updates (<code>bd_uart_update.g</code>) are deliberately not included there — that's an interruption-sensitive flash operation, best run as its own macro with your full attention.</p>
+
+							<v-divider class="mb-4" />
+
 							<div class="text-subtitle-1 mb-1"><v-icon size="small" class="mr-1" color="primary">mdi-file-document-outline</v-icon>Log files on the Duet SD card</div>
 							<v-table density="compact" class="mb-4">
 								<thead><tr><th>File</th><th>Contents</th></tr></thead>
@@ -613,6 +631,13 @@ canvas {
 							<div class="text-caption" style="opacity:0.5">bd_pressure PA Calibration plugin — <a href="https://github.com/jaysuk/bd_pressure_dwc_plugin" target="_blank">github.com/jaysuk/bd_pressure_dwc_plugin</a></div>
 
 						</v-card-text>
+					</v-tabs-window-item>
+
+					<!-- ============================================================
+					     TAB — SETUP
+					     ============================================================ -->
+					<v-tabs-window-item value="setup">
+						<SensorSetupTab />
 					</v-tabs-window-item>
 
 				</v-tabs-window>
@@ -647,6 +672,8 @@ import { useTheme } from "vuetify";
 import { AboutDialog, HelpTip } from "dwc-plugin-runtime";
 
 import { useMachineStore } from "@/stores/machine";
+
+import SensorSetupTab from "./SensorSetupTab.vue";
 
 import { PLUGIN_MANIFEST_ID, WARM_UP_SKIP, LOG_DIR, STATUS_PATH, POLL_INTERVAL_MS, DOCS_URL } from "../model/constants";
 import { HOTEND_PRESETS, activePreset, hotendPresetItems, type HotendPreset } from "../model/presets";
