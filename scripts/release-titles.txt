@@ -1,0 +1,22 @@
+# GitHub Release titles for BdPressurePA, one per line (blank lines and # comments ignored).
+# Picked by version index (semver-sorted), wrapping if it runs out. PA / pressure puns.
+Under Pressure
+Advance Notice
+The Pressure is On
+Spring Loaded
+Squeeze Play
+Elastic Limit
+No More Blobs
+Corner Confidence
+Compensated
+Stress Relief
+Pressure Drop
+Precise Advance
+Sharp Corners Ahead
+Zero Blobs
+Flow Control
+Filament Feelings
+Calibrated Response
+The Pressure Advance
+Perfectly Timed
+PA Day
